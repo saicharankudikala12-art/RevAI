@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="RevAI - AI-powered last-minute exam revision application. Rapidly practice high-value questions and generate flashcards from your study materials.">
+  <title>RevAI - AI-Powered Last-Minute Exam Revision</title>
+  
+  <!-- Typography -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+  <!-- Styles -->
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Header -->
+    <header class="app-header">
+      <div class="brand-wrapper">
+        <div class="brand-logo" aria-hidden="true">R</div>
+        <div>
+          <h1 class="brand-title">RevAI</h1>
+          <p class="brand-subtitle">Last-Minute Exam Revision</p>
+        </div>
+      </div>
+
+      <!-- Backend Connection Status Pill -->
+      <div id="backendStatusPill" class="status-pill" title="Live connection status to the RevAI API">
+        <span class="status-indicator"></span>
+        <span id="backendStatusText">Connecting...</span>
+      </div>
+    </header>
+
+    <!-- Revision Pipeline Stepper -->
+    <nav class="stepper-nav" aria-label="Revision Steps">
+      <div class="step-item active">
+        <span class="step-number">1</span>
+        <span class="step-label">PDF Upload</span>
+      </div>
+      <div class="step-divider" aria-hidden="true"></div>
+      <div class="step-item">
+        <span class="step-number">2</span>
+        <span class="step-label">Settings</span>
+      </div>
+      <div class="step-divider" aria-hidden="true"></div>
+      <div class="step-item">
+        <span class="step-number">3</span>
+        <span class="step-label">Revision Test</span>
+      </div>
+      <div class="step-divider" aria-hidden="true"></div>
+      <div class="step-item">
+        <span class="step-number">4</span>
+        <span class="step-label">Results & Analysis</span>
+      </div>
+      <div class="step-divider" aria-hidden="true"></div>
+      <div class="step-item">
+        <span class="step-number">5</span>
+        <span class="step-label">Flashcards</span>
+      </div>
+    </nav>
+
+    <!-- Main Content Area -->
+    <main>
+      <section class="content-card" aria-labelledby="foundation-heading">
+        <div class="card-header-badge">Milestone 1 · Architecture & Foundation</div>
+        
+        <div>
+          <h2 id="foundation-heading" class="card-title">RevAI Core Foundation Active</h2>
+          <p class="card-description">
+            RevAI is built to help students rapidly revise when exam time is running short. 
+            The system foundation, API contracts, environment management, and modular architecture are configured and operational.
+          </p>
+        </div>
+
+        <!-- Live Backend Diagnostics -->
+        <div class="diagnostics-grid" aria-label="System Diagnostics">
+          <div class="diag-card">
+            <span class="diag-label">API Endpoint</span>
+            <span id="diagEndpoint" class="diag-value">Loading...</span>
+          </div>
+          <div class="diag-card">
+            <span class="diag-label">API Health</span>
+            <span id="diagStatus" class="diag-value">Checking...</span>
+          </div>
+          <div class="diag-card">
+            <span class="diag-label">Ping Latency</span>
+            <span id="diagLatency" class="diag-value">--</span>
+          </div>
+          <div class="diag-card">
+            <span class="diag-label">Environment</span>
+            <span id="diagEnv" class="diag-value">--</span>
+          </div>
+          <div class="diag-card">
+            <span class="diag-label">Version</span>
+            <span id="diagVersion" class="diag-value">--</span>
+          </div>
+        </div>
+
+        <!-- Action Controls -->
+        <div class="actions-row">
+          <button id="pingBackendBtn" class="btn btn-primary" type="button">
+            Ping Backend API
+          </button>
+          <a href="http://localhost:8000/docs" target="_blank" rel="noopener noreferrer" class="btn btn-secondary">
+            Open API Documentation (Swagger)
+          </a>
+        </div>
+
+        <!-- Modular Architecture Roadmap -->
+        <div class="architecture-section">
+          <h3 class="section-title">Modular Pipeline Roadmap</h3>
+          <div class="modules-grid">
+            <div class="module-card">
+              <div class="module-header">
+                <span class="module-title">Foundation & API</span>
+                <span class="module-status ready">Milestone 1 (Complete)</span>
+              </div>
+              <p class="module-desc">FastAPI backend, Pydantic data models, CORS policy, and decoupled client.</p>
+            </div>
+
+            <div class="module-card">
+              <div class="module-header">
+                <span class="module-title">PDF Extraction</span>
+                <span class="module-status upcoming">Milestone 2 (Next)</span>
+              </div>
+              <p class="module-desc">Automatic page count detection and multi-page text extraction from uploaded study PDFs.</p>
+            </div>
+
+            <div class="module-card">
+              <div class="module-header">
+                <span class="module-title">Revision Settings</span>
+                <span class="module-status upcoming">Milestone 3</span>
+              </div>
+              <p class="module-desc">Input controls for remaining exam time and target number of questions.</p>
+            </div>
+
+            <div class="module-card">
+              <div class="module-header">
+                <span class="module-title">AI Revision Generator</span>
+                <span class="module-status upcoming">Milestone 4</span>
+              </div>
+              <p class="module-desc">Time-optimized question generation with structured options and explanations.</p>
+            </div>
+
+            <div class="module-card">
+              <div class="module-header">
+                <span class="module-title">Test & Scoring Engine</span>
+                <span class="module-status upcoming">Milestones 5 & 6</span>
+              </div>
+              <p class="module-desc">Interactive quiz experience, answer tracking, accuracy metrics, and score summary.</p>
+            </div>
+
+            <div class="module-card">
+              <div class="module-header">
+                <span class="module-title">Weak Areas & Flashcards</span>
+                <span class="module-status upcoming">Milestones 7 & 8</span>
+              </div>
+              <p class="module-desc">Targeted concept detection and student-friendly rapid memory cards.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- Footer -->
+    <footer class="app-footer">
+      <div>RevAI · AI-Powered Last-Minute Exam Revision</div>
+      <div>Designed for clean modularity, portability, and AWS deployment readiness</div>
+    </footer>
+  </div>
+
+  <!-- Scripts -->
+  <script src="js/config.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
