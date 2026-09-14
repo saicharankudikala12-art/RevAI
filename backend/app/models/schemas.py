@@ -16,6 +16,19 @@ class HealthResponse(BaseModel):
     )
 
 
+class PDFUploadResponse(BaseModel):
+    """Response schema for successful PDF upload and extraction."""
+    success: bool = Field(default=True, description="Whether the processing succeeded")
+    status: str = Field(default="processed", description="Current PDF processing status")
+    filename: str = Field(description="Original name of the uploaded PDF")
+    page_count: int = Field(description="Total number of pages automatically detected in the PDF")
+    extracted_text: str = Field(description="Full extracted text from all pages of the PDF")
+    text_length: int = Field(description="Total character count of extracted text")
+    word_count: int = Field(description="Total word count of extracted text")
+    preview: str = Field(description="Short preview snippet of the extracted text")
+    message: str = Field(default="PDF processed successfully", description="User-friendly status message")
+
+
 class APIErrorResponse(BaseModel):
     """Standard error response payload."""
     detail: str = Field(description="Error message detailing the failure")
