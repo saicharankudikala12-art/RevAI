@@ -3,15 +3,16 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="RevAI - AI-powered last-minute exam revision application. Rapidly practice high-value questions and generate flashcards from your study materials.">
+  <meta name="description" content="RevAI - AI-powered last-minute exam revision. Upload your study material, customize questions, and practice high-yield topics before your exam.">
   <title>RevAI - AI-Powered Last-Minute Exam Revision</title>
   
   <!-- Typography -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 
   <!-- Styles -->
+  <link rel="stylesheet" href="css/tokens.css">
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -27,147 +28,358 @@
       </div>
 
       <!-- Backend Connection Status Pill -->
-      <div id="backendStatusPill" class="status-pill" title="Live connection status to the RevAI API">
-        <span class="status-indicator"></span>
-        <span id="backendStatusText">Connecting...</span>
+      <div class="header-actions">
+        <div id="backendStatusPill" class="status-pill" title="Live connection status to the RevAI API">
+          <span class="status-indicator"></span>
+          <span id="backendStatusText">Connecting...</span>
+        </div>
       </div>
     </header>
 
     <!-- Revision Pipeline Stepper -->
-    <nav class="stepper-nav" aria-label="Revision Steps">
-      <div class="step-item active">
-        <span class="step-number">1</span>
-        <span class="step-label">PDF Upload</span>
+    <nav class="stepper-nav" aria-label="Revision Steps" id="stepperNav">
+      <div class="step-item active" id="stepItem1" data-step="1">
+        <span class="step-icon" id="stepIcon1">●</span>
+        <span class="step-label" id="stepLabel1">PDF Upload</span>
       </div>
       <div class="step-divider" aria-hidden="true"></div>
-      <div class="step-item">
-        <span class="step-number">2</span>
-        <span class="step-label">Settings</span>
+      <div class="step-item" id="stepItem2" data-step="2">
+        <span class="step-icon" id="stepIcon2">○</span>
+        <span class="step-label" id="stepLabel2">Settings</span>
       </div>
       <div class="step-divider" aria-hidden="true"></div>
-      <div class="step-item">
-        <span class="step-number">3</span>
-        <span class="step-label">Revision Test</span>
+      <div class="step-item" id="stepItem3" data-step="3">
+        <span class="step-icon" id="stepIcon3">○</span>
+        <span class="step-label" id="stepLabel3">Revision Test</span>
       </div>
       <div class="step-divider" aria-hidden="true"></div>
-      <div class="step-item">
-        <span class="step-number">4</span>
-        <span class="step-label">Results & Analysis</span>
+      <div class="step-item locked" id="stepItem4" data-step="4">
+        <span class="step-icon" id="stepIcon4">○</span>
+        <span class="step-label" id="stepLabel4">Results & Analysis</span>
       </div>
       <div class="step-divider" aria-hidden="true"></div>
-      <div class="step-item">
-        <span class="step-number">5</span>
-        <span class="step-label">Flashcards</span>
+      <div class="step-item locked" id="stepItem5" data-step="5">
+        <span class="step-icon" id="stepIcon5">○</span>
+        <span class="step-label" id="stepLabel5">Flashcards</span>
       </div>
     </nav>
 
     <!-- Main Content Area -->
-    <main>
-      <section class="content-card" aria-labelledby="foundation-heading">
-        <div class="card-header-badge">Milestone 1 · Architecture & Foundation</div>
+    <main id="mainContent">
+
+      <!-- Global / Contextual Error Banner -->
+      <div id="uploadErrorBanner" class="alert-banner alert-danger hidden" role="alert">
+        <div class="alert-content">
+          <span class="alert-icon" aria-hidden="true">⚠️</span>
+          <span id="uploadErrorText" class="alert-message">An error occurred.</span>
+        </div>
+        <button id="dismissErrorBtn" class="alert-close-btn" type="button" aria-label="Dismiss error">✕</button>
+      </div>
+
+      <!-- ============================================== -->
+      <!-- STAGE 1: PDF UPLOAD & PROCESSING               -->
+      <!-- ============================================== -->
+      <section id="stepUploadSection" class="content-card" aria-labelledby="uploadHeading">
+        <div class="card-header-badge">Step 1 · Study Material</div>
         
-        <div>
-          <h2 id="foundation-heading" class="card-title">RevAI Core Foundation Active</h2>
+        <div class="card-intro">
+          <h2 id="uploadHeading" class="card-title">Upload Your Exam Study Material</h2>
           <p class="card-description">
-            RevAI is built to help students rapidly revise when exam time is running short. 
-            The system foundation, API contracts, environment management, and modular architecture are configured and operational.
+            Upload your lecture slides, notes, syllabus, or sample paper in PDF format.
+            RevAI extracts and analyzes your content so you can practice high-yield questions in minutes.
           </p>
         </div>
 
-        <!-- Live Backend Diagnostics -->
-        <div class="diagnostics-grid" aria-label="System Diagnostics">
-          <div class="diag-card">
-            <span class="diag-label">API Endpoint</span>
-            <span id="diagEndpoint" class="diag-value">Loading...</span>
+        <!-- Drag & Drop PDF Zone -->
+        <div id="dropZone" class="drop-zone" tabindex="0" role="button" aria-label="PDF drop zone. Drag and drop file or click Choose PDF button">
+          <input type="file" id="pdfFileInput" accept=".pdf,application/pdf" class="file-input-hidden" aria-hidden="true">
+          
+          <div class="drop-icon-wrapper" aria-hidden="true">
+            <svg class="drop-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+              <polyline points="14 2 14 8 20 8"></polyline>
+              <path d="M12 18v-6"></path>
+              <path d="m9 15 3-3 3 3"></path>
+            </svg>
           </div>
-          <div class="diag-card">
-            <span class="diag-label">API Health</span>
-            <span id="diagStatus" class="diag-value">Checking...</span>
-          </div>
-          <div class="diag-card">
-            <span class="diag-label">Ping Latency</span>
-            <span id="diagLatency" class="diag-value">--</span>
-          </div>
-          <div class="diag-card">
-            <span class="diag-label">Environment</span>
-            <span id="diagEnv" class="diag-value">--</span>
-          </div>
-          <div class="diag-card">
-            <span class="diag-label">Version</span>
-            <span id="diagVersion" class="diag-value">--</span>
-          </div>
-        </div>
 
-        <!-- Action Controls -->
-        <div class="actions-row">
-          <button id="pingBackendBtn" class="btn btn-primary" type="button">
-            Ping Backend API
+          <div class="drop-text-group">
+            <p class="drop-primary-text">Drag & drop your study PDF here</p>
+            <p class="drop-secondary-text">or browse files from your computer</p>
+          </div>
+
+          <button id="choosePdfBtn" class="btn btn-primary" type="button">
+            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="17 8 12 3 7 8"></polyline>
+              <line x1="12" y1="3" x2="12" y2="15"></line>
+            </svg>
+            Choose PDF
           </button>
-          <a href="http://localhost:8000/docs" target="_blank" rel="noopener noreferrer" class="btn btn-secondary">
-            Open API Documentation (Swagger)
-          </a>
+
+          <div class="drop-meta-tags">
+            <span class="meta-tag">📄 PDF files only</span>
+            <span class="meta-tag">⚡ Max 25 MB</span>
+            <span class="meta-tag">🔍 Text extraction enabled</span>
+          </div>
         </div>
 
-        <!-- Modular Architecture Roadmap -->
-        <div class="architecture-section">
-          <h3 class="section-title">Modular Pipeline Roadmap</h3>
-          <div class="modules-grid">
-            <div class="module-card">
-              <div class="module-header">
-                <span class="module-title">Foundation & API</span>
-                <span class="module-status ready">Milestone 1 (Complete)</span>
+        <!-- Upload & Processing Loading State -->
+        <div id="uploadLoadingState" class="processing-overlay hidden" aria-live="polite">
+          <div class="spinner-container">
+            <div class="spinner-ring"></div>
+            <div class="spinner-core"></div>
+          </div>
+          <div class="processing-text-group">
+            <h3 class="processing-title">Processing your PDF...</h3>
+            <p class="processing-subtitle">Extracting questions and study content</p>
+            <p id="processingFilename" class="processing-filename">filename.pdf</p>
+          </div>
+        </div>
+
+        <!-- PDF Processing Result Box (Visible after successful upload) -->
+        <div id="pdfResultSection" class="pdf-result-section hidden">
+          <div class="result-success-badge">
+            <span class="success-icon" aria-hidden="true">✓</span>
+            <span>PDF uploaded successfully</span>
+          </div>
+
+          <div class="result-card">
+            <div class="result-header">
+              <div class="result-file-info">
+                <div class="pdf-file-icon" aria-hidden="true">PDF</div>
+                <div>
+                  <h3 id="resultFilename" class="result-filename">document.pdf</h3>
+                  <span class="result-status-tag">Ready for revision</span>
+                </div>
               </div>
-              <p class="module-desc">FastAPI backend, Pydantic data models, CORS policy, and decoupled client.</p>
+
+              <button id="changePdfBtn" class="btn btn-secondary btn-sm" type="button" title="Upload another PDF file">
+                <svg class="btn-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"></path>
+                  <path d="M21 3v5h-5"></path>
+                  <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"></path>
+                  <path d="M8 16H3v5"></path>
+                </svg>
+                Change PDF
+              </button>
             </div>
 
-            <div class="module-card">
-              <div class="module-header">
-                <span class="module-title">PDF Extraction</span>
-                <span class="module-status upcoming">Milestone 2 (Next)</span>
+            <!-- Stats Grid -->
+            <div class="result-metrics-grid">
+              <div class="metric-item">
+                <span class="metric-label">Page Count</span>
+                <span id="resultPageCount" class="metric-value">--</span>
               </div>
-              <p class="module-desc">Automatic page count detection and multi-page text extraction from uploaded study PDFs.</p>
+              <div class="metric-item">
+                <span class="metric-label">Word Count</span>
+                <span id="resultWordCount" class="metric-value">--</span>
+              </div>
+              <div class="metric-item">
+                <span class="metric-label">Text Length</span>
+                <span id="resultCharCount" class="metric-value">--</span>
+              </div>
             </div>
 
-            <div class="module-card">
-              <div class="module-header">
-                <span class="module-title">Revision Settings</span>
-                <span class="module-status upcoming">Milestone 3</span>
+            <!-- Short Text Preview -->
+            <div class="preview-container">
+              <div class="preview-header">
+                <span class="preview-label">Preview</span>
               </div>
-              <p class="module-desc">Input controls for remaining exam time and target number of questions.</p>
-            </div>
-
-            <div class="module-card">
-              <div class="module-header">
-                <span class="module-title">AI Revision Generator</span>
-                <span class="module-status upcoming">Milestone 4</span>
-              </div>
-              <p class="module-desc">Time-optimized question generation with structured options and explanations.</p>
-            </div>
-
-            <div class="module-card">
-              <div class="module-header">
-                <span class="module-title">Test & Scoring Engine</span>
-                <span class="module-status upcoming">Milestones 5 & 6</span>
-              </div>
-              <p class="module-desc">Interactive quiz experience, answer tracking, accuracy metrics, and score summary.</p>
-            </div>
-
-            <div class="module-card">
-              <div class="module-header">
-                <span class="module-title">Weak Areas & Flashcards</span>
-                <span class="module-status upcoming">Milestones 7 & 8</span>
-              </div>
-              <p class="module-desc">Targeted concept detection and student-friendly rapid memory cards.</p>
+              <div id="resultPreviewText" class="preview-box"></div>
             </div>
           </div>
         </div>
       </section>
+
+      <!-- ============================================== -->
+      <!-- STAGE 2: REVISION SETTINGS                     -->
+      <!-- ============================================== -->
+      <section id="stepSettingsSection" class="content-card hidden" aria-labelledby="settingsHeading">
+        <div class="card-header-badge">Step 2 · Revision Settings</div>
+
+        <div class="card-intro">
+          <h2 id="settingsHeading" class="card-title">Customize Your Revision Session</h2>
+          <p class="card-description">
+            Tell us how much time you have before your exam and how many practice questions you want.
+            RevAI structures questions to fit your exact revision timeline.
+          </p>
+        </div>
+
+        <form id="revisionSettingsForm" novalidate>
+          <div class="settings-grid">
+            <!-- Question 1: Time Remaining -->
+            <div class="form-group">
+              <label for="timeInput" class="form-label">
+                <span>How much time do you have?</span>
+                <span class="form-sublabel">Total revision time in minutes</span>
+              </label>
+
+              <div class="input-with-suffix">
+                <input 
+                  type="number" 
+                  id="timeInput" 
+                  name="timeMinutes" 
+                  min="1" 
+                  step="1" 
+                  value="120" 
+                  placeholder="120"
+                  class="form-input" 
+                  required 
+                  aria-describedby="timeHelp timeError"
+                >
+                <span class="input-suffix">minutes</span>
+              </div>
+
+              <!-- Quick Presets -->
+              <div class="preset-chips" id="timePresets" aria-label="Quick time presets">
+                <button type="button" class="preset-chip" data-time="30">30 min</button>
+                <button type="button" class="preset-chip" data-time="60">60 min</button>
+                <button type="button" class="preset-chip" data-time="90">90 min</button>
+                <button type="button" class="preset-chip active" data-time="120">120 min</button>
+              </div>
+
+              <div id="timeError" class="input-error-msg hidden" role="alert"></div>
+              <p id="timeHelp" class="form-help-text">Enter any time greater than 0 minutes.</p>
+            </div>
+
+            <!-- Question 2: Question Count -->
+            <div class="form-group">
+              <label for="questionsInput" class="form-label">
+                <span>How many questions do you want?</span>
+                <span class="form-sublabel">Practice questions to generate</span>
+              </label>
+
+              <div class="input-with-suffix">
+                <input 
+                  type="number" 
+                  id="questionsInput" 
+                  name="questionCount" 
+                  min="1" 
+                  max="50" 
+                  step="1" 
+                  value="20" 
+                  placeholder="20"
+                  class="form-input" 
+                  required 
+                  aria-describedby="questionsHelp questionsError"
+                >
+                <span class="input-suffix">questions</span>
+              </div>
+
+              <!-- Quick Presets -->
+              <div class="preset-chips" id="questionsPresets" aria-label="Quick question presets">
+                <button type="button" class="preset-chip" data-questions="10">10</button>
+                <button type="button" class="preset-chip" data-questions="15">15</button>
+                <button type="button" class="preset-chip active" data-questions="20">20</button>
+                <button type="button" class="preset-chip" data-questions="30">30</button>
+                <button type="button" class="preset-chip" data-questions="50">50</button>
+              </div>
+
+              <div id="questionsError" class="input-error-msg hidden" role="alert"></div>
+              <p id="questionsHelp" class="form-help-text">Choose between 1 and 50 questions.</p>
+            </div>
+          </div>
+
+          <!-- Pace Indicator Card -->
+          <div class="pace-indicator-card">
+            <div class="pace-icon" aria-hidden="true">⏱️</div>
+            <div class="pace-content">
+              <span class="pace-title">Estimated Pace:</span>
+              <span id="paceEstimateText" class="pace-value">~6.0 minutes per question</span>
+            </div>
+          </div>
+
+          <!-- Form Submit Action -->
+          <div class="actions-row settings-actions">
+            <button id="createTestBtn" class="btn btn-primary btn-large" type="button">
+              <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polygon points="5 3 19 12 5 21 5 3"></polygon>
+              </svg>
+              Create Revision Test
+            </button>
+          </div>
+        </form>
+      </section>
+
+      <!-- ============================================== -->
+      <!-- STAGE 3: READY TO GENERATE                     -->
+      <!-- ============================================== -->
+      <section id="stepReadySection" class="content-card hidden" aria-labelledby="readyHeading">
+        <div class="card-header-badge success-badge">Step 3 · Ready to Generate</div>
+
+        <div class="ready-hero">
+          <div class="ready-check-icon" aria-hidden="true">✓</div>
+          <h2 id="readyHeading" class="ready-title">You're ready!</h2>
+          <p class="ready-subtitle">Your revision test is ready to be generated.</p>
+        </div>
+
+        <!-- Summary of validated configuration -->
+        <div class="ready-summary-card">
+          <div class="ready-summary-grid">
+            <div class="ready-item">
+              <span class="ready-label">PDF</span>
+              <span id="readyFilename" class="ready-value">document.pdf</span>
+              <span id="readyDocStats" class="ready-meta">-- pages · -- words</span>
+            </div>
+
+            <div class="ready-item">
+              <span class="ready-label">Time</span>
+              <span id="readyTime" class="ready-value ready-value-lg">120 minutes</span>
+              <span class="ready-meta">Allocated study time</span>
+            </div>
+
+            <div class="ready-item">
+              <span class="ready-label">Questions</span>
+              <span id="readyQuestions" class="ready-value ready-value-lg">20</span>
+              <span id="readyPace" class="ready-meta">6.0 min per question</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Milestone 4 Information Banner -->
+        <div class="milestone-callout">
+          <div class="callout-icon" aria-hidden="true">✨</div>
+          <div class="callout-content">
+            <p class="callout-title">Ready for AI Question Generation</p>
+            <p class="callout-desc">
+              Your study PDF is fully parsed and your revision parameters are locked in frontend state.
+              In <strong>Milestone 4</strong>, Google Gemini will be activated to transform your document into 
+              high-yield exam practice questions.
+            </p>
+          </div>
+        </div>
+
+        <!-- Next Actions -->
+        <div class="actions-row ready-actions">
+          <button id="editSettingsBtn" class="btn btn-secondary" type="button">
+            <svg class="btn-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 20h9"></path>
+              <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
+            </svg>
+            Edit Settings
+          </button>
+          <button id="uploadNewPdfBtn" class="btn btn-secondary" type="button">
+            <svg class="btn-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="17 8 12 3 7 8"></polyline>
+              <line x1="12" y1="3" x2="12" y2="15"></line>
+            </svg>
+            Upload Another PDF
+          </button>
+        </div>
+      </section>
+
     </main>
 
     <!-- Footer -->
     <footer class="app-footer">
       <div>RevAI · AI-Powered Last-Minute Exam Revision</div>
-      <div>Designed for clean modularity, portability, and AWS deployment readiness</div>
+      <div class="footer-links">
+        <span>Backend: <code id="footerApiUrl">http://127.0.0.1:8000</code></span>
+        <span>·</span>
+        <a href="http://127.0.0.1:8000/docs" target="_blank" rel="noopener noreferrer" class="footer-link">API Swagger Docs</a>
+      </div>
     </footer>
   </div>
 
