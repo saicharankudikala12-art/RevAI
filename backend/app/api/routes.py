@@ -132,14 +132,25 @@ async def generate_revision_test(request: RevisionGenerateRequest) -> RevisionGe
         )
 
     try:
-        raw_questions = await generate_revision_questions(
+        gen_result = await generate_revision_questions(
             extracted_text=clean_text,
             time_remaining=request.time_remaining,
             question_count=request.question_count
         )
+        if isinstance(gen_result, dict):
+            raw_questions = gen_result.get("questions", [])
+            provider = gen_result.get("provider", "gemini")
+            model = gen_result.get("model", settings.AI_MODEL)
+        else:
+            raw_questions = gen_result
+            provider = "gemini"
+            model = settings.AI_MODEL
+
         questions = [QuestionItem(**q) for q in raw_questions]
         return RevisionGenerateResponse(
             success=True,
+            provider=provider,
+            model=model,
             time_remaining=request.time_remaining,
             question_count=len(questions),
             questions=questions

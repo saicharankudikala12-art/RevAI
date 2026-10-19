@@ -19,7 +19,14 @@ class Settings(BaseSettings):
 
     # AI Configuration (For Milestone 4)
     AI_API_KEY: str = ""
+    GEMINI_API_KEY: str = ""
     AI_MODEL: str = "gemini-2.5-flash"
+    ALLOW_HEURISTIC_FALLBACK: bool = False
+
+    @property
+    def effective_ai_api_key(self) -> str:
+        """Return the configured Gemini API key from AI_API_KEY or GEMINI_API_KEY."""
+        return (self.AI_API_KEY or self.GEMINI_API_KEY or "").strip()
 
     model_config = SettingsConfigDict(
         env_file=(str(BACKEND_DIR / ".env"), str(ROOT_DIR / ".env")),

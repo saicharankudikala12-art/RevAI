@@ -55,6 +55,8 @@ class RevisionGenerateRequest(BaseModel):
 class RevisionGenerateResponse(BaseModel):
     """Response payload for successfully generated revision questions."""
     success: bool = Field(default=True, description="Whether question generation succeeded")
+    provider: str = Field(default="gemini", description="Question generation provider used: 'gemini' or 'heuristic-fallback'")
+    model: Optional[str] = Field(default=None, description="AI model used if generated via AI")
     time_remaining: int = Field(description="Study time allocated in minutes")
     question_count: int = Field(description="Total number of generated questions")
     questions: list[QuestionItem] = Field(description="List of structured revision questions")

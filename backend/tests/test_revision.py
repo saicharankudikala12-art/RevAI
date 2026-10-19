@@ -103,6 +103,8 @@ def test_revision_generate_successful_mocked(monkeypatch):
         assert response.status_code == 200
         data = response.json()
         assert data["success"] is True
+        assert data["provider"] == "gemini"
+        assert data["model"] is not None
         assert data["time_remaining"] == 30
         assert data["question_count"] == 2
         assert len(data["questions"]) == 2
@@ -193,3 +195,155 @@ def test_ai_service_parse_list_options():
     assert questions[0]["correct_answer"] == "B"
 
 
+def test_ai_service_insufficient_content():
+    """Text with fewer than 5 words or 30 characters raises InsufficientContentError."""
+    import pytest
+    from backend.app.services.ai_service import InsufficientContentError, generate_revision_questions
+
+    with pytest.raises(InsufficientContentError):
+        import asyncio
+        asyncio.run(generate_revision_questions(
+            extracted_text="Too short",
+            time_remaining=30,
+            question_count=5
+        ))
+
+
+def test_ai_service_heuristic_fallback():
+    """Fallback generator creates grounded questions derived strictly from the study text and distinct explanation."""
+    from backend.app.services.ai_service import generate_heuristic_fallback_questions
+
+    sample_text = (
+        "Cellular respiration is a metabolic pathway that breaks down glucose. "
+        "Glycolysis takes place in the cytoplasm of cells. "
+        "The Krebs cycle occurs inside the mitochondrial matrix. "
+        "Oxidative phosphorylation produces the majority of ATP."
+    )
+    questions = generate_heuristic_fallback_questions(sample_text, question_count=3)
+    assert len(questions) == 3
+    for q in questions:
+        assert q["id"] >= 1
+        assert len(q["options"]) == 4
+        assert q["correct_answer"] == "A"
+        assert "[Fallback Review]" in q["explanation"]
+
+
+@pytest.mark.anyio
+async def test_ai_service_gemini_success_mocked(monkeypatch):
+    """Direct generate_revision_questions call with mocked httpx client returns structured Gemini questions."""
+    from unittest.mock import MagicMock
+    import httpx
+    from backend.app.services.ai_service import generate_revision_questions
+
+    monkeypatch.setattr(settings, "AI_API_KEY", "test-api-key")
+    monkeypatch.setattr(settings, "GEMINI_API_KEY", "")
+
+    sample_text = (
+        "The mitochondria is known as the powerhouse of the cell. "
+        "It generates most of the chemical energy needed to power biochemical reactions."
+    )
+
+    fake_gemini_json = {
+        "candidates": [
+            {
+                "content": {
+                    "parts": [
+                        {
+                            "text": """{
+                                "questions": [
+                                    {
+                                        "id": 1,
+                                        "question": "What is the primary function of mitochondria?",
+                                        "options": {
+                                            "A": "Produces chemical energy",
+                                            "B": "Synthesizes DNA only",
+                                            "C": "Degrades proteins",
+                                            "D": "Provides cell motility"
+                                        },
+                                        "correct_answer": "A",
+                                        "explanation": "Mitochondria produce cellular ATP energy."
+                                    }
+                                ]
+                            }"""
+                        }
+                    ]
+                }
+            }
+        ]
+    }
+
+    mock_response = MagicMock(spec=httpx.Response)
+    mock_response.status_code = 200
+    mock_response.json.return_value = fake_gemini_json
+
+    mock_client = AsyncMock(spec=httpx.AsyncClient)
+    mock_client.post.return_value = mock_response
+
+    result = await generate_revision_questions(
+        extracted_text=sample_text,
+        time_remaining=30,
+        question_count=1,
+        client=mock_client
+    )
+
+    assert result["provider"] == "gemini"
+    assert len(result["questions"]) == 1
+    assert result["questions"][0]["question"] == "What is the primary function of mitochondria?"
+    assert result["questions"][0]["options"]["A"] == "Produces chemical energy"
+
+
+@pytest.mark.anyio
+async def test_ai_service_gemini_rate_limit_429(monkeypatch):
+    """When Gemini returns 429, AIServiceError with status_code 429 is raised."""
+    from unittest.mock import MagicMock
+    import httpx
+    from backend.app.services.ai_service import generate_revision_questions, AIServiceError
+
+    monkeypatch.setattr(settings, "AI_API_KEY", "test-api-key")
+
+    mock_response = MagicMock(spec=httpx.Response)
+    mock_response.status_code = 429
+    mock_response.text = "RESOURCE_EXHAUSTED: Rate limit exceeded"
+
+    mock_client = AsyncMock(spec=httpx.AsyncClient)
+    mock_client.post.return_value = mock_response
+
+    sample_text = "Photosynthesis converts solar light energy into chemical energy."
+    with pytest.raises(AIServiceError) as exc_info:
+        await generate_revision_questions(
+            extracted_text=sample_text,
+            time_remaining=30,
+            question_count=2,
+            client=mock_client,
+            allow_fallback=False
+        )
+    assert exc_info.value.status_code == 429
+
+
+@pytest.mark.anyio
+async def test_ai_service_gemini_timeout_with_fallback(monkeypatch):
+    """When Gemini times out and fallback is enabled, heuristic fallback questions are returned with provider 'heuristic-fallback'."""
+    import httpx
+    from backend.app.services.ai_service import generate_revision_questions
+
+    monkeypatch.setattr(settings, "AI_API_KEY", "test-api-key")
+
+    mock_client = AsyncMock(spec=httpx.AsyncClient)
+    mock_client.post.side_effect = httpx.TimeoutException("Connection timed out")
+
+    sample_text = (
+        "Enzymes are biological catalysts that speed up chemical reactions. "
+        "Substrates bind to the enzyme active site to form products."
+    )
+    result = await generate_revision_questions(
+        extracted_text=sample_text,
+        time_remaining=20,
+        question_count=2,
+        client=mock_client,
+        allow_fallback=True
+    )
+
+    assert result["provider"] == "heuristic-fallback"
+    assert result["model"] is None
+    assert len(result["questions"]) == 2
+    assert "[Fallback Review]" in result["questions"][0]["explanation"]

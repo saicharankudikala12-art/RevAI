@@ -170,31 +170,118 @@ def parse_and_validate_questions(raw_text: str, expected_count: int) -> List[Dic
     return normalized_questions
 
 
+MINIMUM_EXTRACTED_WORDS = 5
+MINIMUM_EXTRACTED_CHARS = 30
+
+
+class InsufficientContentError(AIServiceError):
+    """Raised when the study material does not contain enough text to generate questions."""
+    def __init__(self, message: str = "The study material does not provide enough text to generate revision questions."):
+        super().__init__(message=message, status_code=400)
+
+
+def generate_heuristic_fallback_questions(
+    extracted_text: str,
+    question_count: int
+) -> List[Dict[str, Any]]:
+    """
+    Generate grounded fallback revision questions directly derived from the study text.
+    Clearly marks questions as heuristic-fallback, ensuring never to present them
+    as genuine Gemini AI output.
+    """
+    sentences = [
+        s.strip() for s in re.split(r"(?<=[.!?])\s+", extracted_text)
+        if len(s.strip()) > 20
+    ]
+    if not sentences:
+        words = extracted_text.split()
+        chunk_size = 15
+        sentences = [
+            " ".join(words[i:i + chunk_size])
+            for i in range(0, min(len(words), 150), chunk_size)
+        ]
+
+    if not sentences:
+        raise InsufficientContentError("Not enough readable content in the PDF to generate fallback questions.")
+
+    questions: List[Dict[str, Any]] = []
+    total_sentences = len(sentences)
+
+    for i in range(question_count):
+        target_sent = sentences[i % total_sentences]
+        distractor_1 = sentences[(i + 1) % total_sentences]
+        distractor_2 = sentences[(i + 2) % total_sentences]
+        distractor_3 = sentences[(i + 3) % total_sentences]
+
+        prompt_text = f"According to the study material: '{target_sent[:120]}...', which statement accurately reflects this concept?"
+
+        options = {
+            "A": f"{target_sent[:90]}.",
+            "B": f"Contrastingly: {distractor_1[:80]}.",
+            "C": f"Alternatively: {distractor_2[:80]}.",
+            "D": f"Furthermore: {distractor_3[:80]}."
+        }
+
+        questions.append({
+            "id": i + 1,
+            "question": prompt_text,
+            "options": options,
+            "correct_answer": "A",
+            "explanation": f"[Fallback Review] Option A is directly quoted from the study material: '{target_sent[:100]}...'"
+        })
+
+    return questions
+
+
 async def generate_revision_questions(
     extracted_text: str,
     time_remaining: int,
     question_count: int,
-    client: Optional[httpx.AsyncClient] = None
-) -> List[Dict[str, Any]]:
+    client: Optional[httpx.AsyncClient] = None,
+    allow_fallback: Optional[bool] = None
+) -> Dict[str, Any]:
     """
-    Generate structured revision questions using Google Gemini.
+    Generate structured revision questions using Google Gemini, with robust fallback
+    and validation handling.
 
     Args:
         extracted_text: Text extracted from the study PDF.
         time_remaining: Available study time in minutes.
         question_count: Target number of questions (1-50).
         client: Optional httpx.AsyncClient for dependency injection / testing.
+        allow_fallback: Whether to use heuristic fallback on AI failure (defaults to settings.ALLOW_HEURISTIC_FALLBACK).
 
     Returns:
-        List of normalized question dictionaries.
+        Dict with keys:
+            - questions: List of normalized question dicts
+            - provider: "gemini" or "heuristic-fallback"
+            - model: AI model used (or None for fallback)
 
     Raises:
-        AIServiceConfigurationError: If AI_API_KEY is missing or empty.
-        AIServiceError: If Gemini API fails, times out, or returns invalid structure.
+        InsufficientContentError: If text is empty or too short.
+        AIServiceConfigurationError: If API key is missing or unauthorized.
+        AIServiceError: If Gemini API fails, times out, rate limits, or outputs invalid schema.
     """
-    api_key = settings.AI_API_KEY.strip()
+    clean_text = (extracted_text or "").strip()
+    if not clean_text or len(clean_text) < MINIMUM_EXTRACTED_CHARS or len(clean_text.split()) < MINIMUM_EXTRACTED_WORDS:
+        raise InsufficientContentError(
+            "The study material does not provide enough text to generate revision questions. "
+            "Please upload a document with more study content."
+        )
+
+    api_key = settings.effective_ai_api_key
+    fallback_enabled = allow_fallback if allow_fallback is not None else settings.ALLOW_HEURISTIC_FALLBACK
+
     if not api_key:
-        logger.warning("AI_API_KEY is not configured in settings")
+        logger.warning("No effective Gemini API key configured in settings (AI_API_KEY / GEMINI_API_KEY)")
+        if fallback_enabled:
+            logger.info("Falling back to heuristic question generation due to missing API key")
+            fallback_qs = generate_heuristic_fallback_questions(clean_text, question_count)
+            return {
+                "questions": fallback_qs,
+                "provider": "heuristic-fallback",
+                "model": None
+            }
         raise AIServiceConfigurationError(
             "AI generation is not configured yet. Please check the backend Gemini configuration."
         )
@@ -206,7 +293,7 @@ async def generate_revision_questions(
 
     # Build prompt
     prompt = build_revision_prompt(
-        extracted_text=extracted_text,
+        extracted_text=clean_text,
         time_remaining=time_remaining,
         question_count=question_count
     )
@@ -238,10 +325,48 @@ async def generate_revision_questions(
                 response = await http_client.post(url, headers=headers, json=payload, timeout=60.0)
     except httpx.TimeoutException as exc:
         logger.error("Gemini API request timed out: %s", str(exc))
+        if fallback_enabled:
+            logger.info("Falling back to heuristic question generation due to Gemini timeout")
+            fallback_qs = generate_heuristic_fallback_questions(clean_text, question_count)
+            return {
+                "questions": fallback_qs,
+                "provider": "heuristic-fallback",
+                "model": None
+            }
         raise AIServiceError("We couldn't generate your revision test right now. Please try again.") from exc
     except httpx.RequestError as exc:
         logger.error("Gemini API network connection failed: %s", str(exc))
+        if fallback_enabled:
+            logger.info("Falling back to heuristic question generation due to network error")
+            fallback_qs = generate_heuristic_fallback_questions(clean_text, question_count)
+            return {
+                "questions": fallback_qs,
+                "provider": "heuristic-fallback",
+                "model": None
+            }
         raise AIServiceError("We couldn't generate your revision test right now. Please try again.") from exc
+
+    if response.status_code == 401 or response.status_code == 403:
+        logger.error("Gemini API authentication failed with status %d: %s", response.status_code, response.text[:200])
+        if fallback_enabled:
+            fallback_qs = generate_heuristic_fallback_questions(clean_text, question_count)
+            return {
+                "questions": fallback_qs,
+                "provider": "heuristic-fallback",
+                "model": None
+            }
+        raise AIServiceConfigurationError("AI service authentication failed. Please verify your Gemini API key.")
+
+    if response.status_code == 429:
+        logger.warning("Gemini API rate limit exceeded (429): %s", response.text[:200])
+        if fallback_enabled:
+            fallback_qs = generate_heuristic_fallback_questions(clean_text, question_count)
+            return {
+                "questions": fallback_qs,
+                "provider": "heuristic-fallback",
+                "model": None
+            }
+        raise AIServiceError("AI rate limit reached. Please wait a moment and try again.", status_code=429)
 
     if response.status_code != 200:
         logger.error(
@@ -249,6 +374,13 @@ async def generate_revision_questions(
             response.status_code,
             response.text[:200]
         )
+        if fallback_enabled:
+            fallback_qs = generate_heuristic_fallback_questions(clean_text, question_count)
+            return {
+                "questions": fallback_qs,
+                "provider": "heuristic-fallback",
+                "model": None
+            }
         raise AIServiceError("We couldn't generate your revision test right now. Please try again.")
 
     try:
@@ -257,7 +389,13 @@ async def generate_revision_questions(
         if not candidates:
             raise ValueError("No candidates returned in Gemini response")
 
-        content = candidates[0].get("content", {})
+        candidate = candidates[0]
+        finish_reason = candidate.get("finishReason")
+        if finish_reason and finish_reason in ["SAFETY", "RECITATION"]:
+            logger.warning("Gemini generation stopped with finishReason: %s", finish_reason)
+            raise AIServiceError("Study content could not be processed due to safety policies.")
+
+        content = candidate.get("content", {})
         parts = content.get("parts", [])
         if not parts:
             raise ValueError("No content parts returned in candidate")
@@ -265,6 +403,29 @@ async def generate_revision_questions(
         raw_text = parts[0].get("text", "")
     except Exception as exc:
         logger.error("Failed to extract content part from Gemini response: %s", str(exc))
+        if fallback_enabled:
+            fallback_qs = generate_heuristic_fallback_questions(clean_text, question_count)
+            return {
+                "questions": fallback_qs,
+                "provider": "heuristic-fallback",
+                "model": None
+            }
         raise AIServiceError("We couldn't generate your revision test right now. Please try again.") from exc
 
-    return parse_and_validate_questions(raw_text, expected_count=question_count)
+    try:
+        parsed_questions = parse_and_validate_questions(raw_text, expected_count=question_count)
+    except AIServiceError:
+        if fallback_enabled:
+            fallback_qs = generate_heuristic_fallback_questions(clean_text, question_count)
+            return {
+                "questions": fallback_qs,
+                "provider": "heuristic-fallback",
+                "model": None
+            }
+        raise
+
+    return {
+        "questions": parsed_questions,
+        "provider": "gemini",
+        "model": model_name
+    }
