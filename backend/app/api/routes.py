@@ -3,12 +3,34 @@ from fastapi import APIRouter, File, UploadFile, HTTPException, status
 
 try:
     from backend.app.core.config import settings
-    from backend.app.models.schemas import HealthResponse, PDFUploadResponse
+    from backend.app.models.schemas import (
+        HealthResponse,
+        PDFUploadResponse,
+        RevisionGenerateRequest,
+        RevisionGenerateResponse,
+        QuestionItem
+    )
     from backend.app.services.pdf_service import extract_pdf_data, PDFProcessingError
+    from backend.app.services.ai_service import (
+        generate_revision_questions,
+        AIServiceError,
+        AIServiceConfigurationError
+    )
 except ImportError:  # pragma: no cover
     from app.core.config import settings
-    from app.models.schemas import HealthResponse, PDFUploadResponse
+    from app.models.schemas import (
+        HealthResponse,
+        PDFUploadResponse,
+        RevisionGenerateRequest,
+        RevisionGenerateResponse,
+        QuestionItem
+    )
     from app.services.pdf_service import extract_pdf_data, PDFProcessingError
+    from app.services.ai_service import (
+        generate_revision_questions,
+        AIServiceError,
+        AIServiceConfigurationError
+    )
 
 api_router = APIRouter()
 
@@ -79,3 +101,62 @@ async def upload_pdf(file: UploadFile = File(...)) -> PDFUploadResponse:
         ) from exc
     finally:
         await file.close()
+
+
+@api_router.post(
+    "/revision/generate",
+    response_model=RevisionGenerateResponse,
+    tags=["Revision Generation"],
+    summary="Generate AI Revision Test",
+    description="Generates high-yield multiple-choice questions from extracted study content using Gemini AI."
+)
+async def generate_revision_test(request: RevisionGenerateRequest) -> RevisionGenerateResponse:
+    """Generate structured revision questions based on extracted PDF text and time available."""
+    clean_text = request.extracted_text.strip()
+    if not clean_text:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Extracted study material text cannot be empty."
+        )
+
+    if request.time_remaining <= 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Time remaining must be greater than 0 minutes."
+        )
+
+    if request.question_count <= 0 or request.question_count > 50:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Question count must be between 1 and 50 questions."
+        )
+
+    try:
+        raw_questions = await generate_revision_questions(
+            extracted_text=clean_text,
+            time_remaining=request.time_remaining,
+            question_count=request.question_count
+        )
+        questions = [QuestionItem(**q) for q in raw_questions]
+        return RevisionGenerateResponse(
+            success=True,
+            time_remaining=request.time_remaining,
+            question_count=len(questions),
+            questions=questions
+        )
+    except AIServiceConfigurationError as cfg_err:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=cfg_err.message
+        ) from cfg_err
+    except AIServiceError as ai_err:
+        raise HTTPException(
+            status_code=ai_err.status_code,
+            detail=ai_err.message
+        ) from ai_err
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="We couldn't generate your revision test right now. Please try again."
+        ) from exc
+

@@ -110,5 +110,67 @@ const API = {
         error: 'Unable to connect to RevAI backend server at http://127.0.0.1:8000. Please ensure the backend is running.'
       };
     }
+  },
+
+  /**
+   * Request Gemini AI revision test generation.
+   * @param {string} extractedText - Text from the study PDF.
+   * @param {number} timeRemaining - Available study time in minutes.
+   * @param {number} questionCount - Number of questions (1-50).
+   * @returns {Promise<{success: boolean, data?: object, status?: number, error?: string}>}
+   */
+  async generateRevisionTest(extractedText, timeRemaining, questionCount) {
+    try {
+      const response = await fetch(`${CONFIG.API_BASE_URL}/revision/generate`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify({
+          extracted_text: extractedText,
+          time_remaining: timeRemaining,
+          question_count: questionCount
+        })
+      });
+
+      let json = null;
+      try {
+        json = await response.json();
+      } catch (parseErr) {
+        json = null;
+      }
+
+      if (!response.ok) {
+        let errorMsg = "We couldn't generate your revision test right now. Please try again.";
+        if (json && json.detail) {
+          if (typeof json.detail === 'string') {
+            errorMsg = json.detail;
+          } else if (Array.isArray(json.detail)) {
+            errorMsg = json.detail.map(d => d.msg || d.detail || JSON.stringify(d)).join('; ');
+          }
+        } else if (response.status === 503) {
+          errorMsg = 'AI generation is not configured yet. Please check the backend Gemini configuration.';
+        }
+
+        return {
+          success: false,
+          status: response.status,
+          error: errorMsg
+        };
+      }
+
+      return {
+        success: true,
+        data: json
+      };
+    } catch (err) {
+      return {
+        success: false,
+        status: 0,
+        error: 'Unable to connect to RevAI backend server at http://127.0.0.1:8000. Please ensure the backend is running.'
+      };
+    }
   }
 };
+

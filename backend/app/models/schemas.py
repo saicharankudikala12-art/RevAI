@@ -34,3 +34,28 @@ class APIErrorResponse(BaseModel):
     detail: str = Field(description="Error message detailing the failure")
     error_code: Optional[str] = Field(default=None, description="Optional machine-readable error code")
     context: Optional[dict[str, Any]] = Field(default=None, description="Additional context or validation details")
+
+
+class QuestionItem(BaseModel):
+    """Schema for a single multiple-choice revision question."""
+    id: int = Field(description="1-based question number")
+    question: str = Field(description="The question prompt")
+    options: dict[str, str] = Field(description="Four choices keyed by A, B, C, D")
+    correct_answer: str = Field(description="Correct choice identifier: A, B, C, or D")
+    explanation: str = Field(description="Clear explanation of the correct choice")
+
+
+class RevisionGenerateRequest(BaseModel):
+    """Request payload for generating revision test questions."""
+    extracted_text: str = Field(..., description="Extracted study material text from PDF")
+    time_remaining: int = Field(..., gt=0, description="Available study time in minutes")
+    question_count: int = Field(..., gt=0, le=50, description="Target number of questions (1-50)")
+
+
+class RevisionGenerateResponse(BaseModel):
+    """Response payload for successfully generated revision questions."""
+    success: bool = Field(default=True, description="Whether question generation succeeded")
+    time_remaining: int = Field(description="Study time allocated in minutes")
+    question_count: int = Field(description="Total number of generated questions")
+    questions: list[QuestionItem] = Field(description="List of structured revision questions")
+

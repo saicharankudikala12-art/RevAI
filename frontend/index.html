@@ -303,70 +303,97 @@
       </section>
 
       <!-- ============================================== -->
-      <!-- STAGE 3: READY TO GENERATE                     -->
+      <!-- STAGE 3: AI GENERATION LOADING STATE           -->
       <!-- ============================================== -->
-      <section id="stepReadySection" class="content-card hidden" aria-labelledby="readyHeading">
-        <div class="card-header-badge success-badge">Step 3 · Ready to Generate</div>
-
-        <div class="ready-hero">
-          <div class="ready-check-icon" aria-hidden="true">✓</div>
-          <h2 id="readyHeading" class="ready-title">You're ready!</h2>
-          <p class="ready-subtitle">Your revision test is ready to be generated.</p>
+      <section id="generatingLoadingSection" class="content-card hidden text-center" aria-live="polite">
+        <div class="generating-hero">
+          <div class="generating-spinner" aria-hidden="true"></div>
+          <h2 class="generating-title">Generating Your Revision Test...</h2>
+          <p class="generating-subtitle">Google Gemini is analyzing your study notes to craft high-yield revision MCQs.</p>
+          <div class="generating-meta-pills">
+            <span id="genPillTime" class="meta-pill">⏱️ 120 minutes</span>
+            <span id="genPillQuestions" class="meta-pill">📝 20 questions</span>
+            <span id="genPillPace" class="meta-pill">⚡ ~6.0 min/q</span>
+          </div>
+          <p class="generating-hint">This usually takes 5 to 15 seconds. Please keep this window open.</p>
         </div>
+      </section>
 
-        <!-- Summary of validated configuration -->
-        <div class="ready-summary-card">
-          <div class="ready-summary-grid">
-            <div class="ready-item">
-              <span class="ready-label">PDF</span>
-              <span id="readyFilename" class="ready-value">document.pdf</span>
-              <span id="readyDocStats" class="ready-meta">-- pages · -- words</span>
-            </div>
-
-            <div class="ready-item">
-              <span class="ready-label">Time</span>
-              <span id="readyTime" class="ready-value ready-value-lg">120 minutes</span>
-              <span class="ready-meta">Allocated study time</span>
-            </div>
-
-            <div class="ready-item">
-              <span class="ready-label">Questions</span>
-              <span id="readyQuestions" class="ready-value ready-value-lg">20</span>
-              <span id="readyPace" class="ready-meta">6.0 min per question</span>
-            </div>
+      <!-- ============================================== -->
+      <!-- STAGE 3: REVISION TEST QUESTION INTERFACE      -->
+      <!-- ============================================== -->
+      <section id="stepTestSection" class="content-card hidden" aria-labelledby="testHeading">
+        <div class="test-top-bar">
+          <div>
+            <div class="card-header-badge active-badge">Step 3 · Revision Test</div>
+            <h2 id="testHeading" class="test-heading">Revision Test</h2>
+          </div>
+          <div class="test-top-stats">
+            <span id="testPaceBadge" class="test-stat-badge">⏱️ Pacing: ~6.0 min/q</span>
+            <span id="testTotalBadge" class="test-stat-badge">📝 20 Questions</span>
           </div>
         </div>
 
-        <!-- Milestone 4 Information Banner -->
-        <div class="milestone-callout">
-          <div class="callout-icon" aria-hidden="true">✨</div>
-          <div class="callout-content">
-            <p class="callout-title">Ready for AI Question Generation</p>
-            <p class="callout-desc">
-              Your study PDF is fully parsed and your revision parameters are locked in frontend state.
-              In <strong>Milestone 4</strong>, Google Gemini will be activated to transform your document into 
-              high-yield exam practice questions.
-            </p>
+        <!-- Question Progress Bar & Counter -->
+        <div class="test-progress-box">
+          <div class="test-progress-labels">
+            <span id="questionCounterText" class="progress-question-counter">Question 1 of 20</span>
+            <span id="answeredCounterText" class="progress-answered-counter">0 of 20 answered</span>
+          </div>
+          <div class="progress-bar-track">
+            <div id="testProgressBarFill" class="progress-bar-fill" style="width: 5%"></div>
           </div>
         </div>
 
-        <!-- Next Actions -->
-        <div class="actions-row ready-actions">
-          <button id="editSettingsBtn" class="btn btn-secondary" type="button">
+        <!-- Current Question Display -->
+        <div class="question-card" id="questionCard">
+          <div class="question-header">
+            <span id="questionBadgeNum" class="question-num-pill">Q1</span>
+            <h3 id="questionPromptText" class="question-prompt">Loading question...</h3>
+          </div>
+
+          <!-- Answer Options List (A, B, C, D) -->
+          <div id="optionsContainer" class="options-container" role="radiogroup" aria-label="Question choices">
+            <!-- Dynamic option elements rendered via JS -->
+          </div>
+
+          <!-- Answer Selection Feedback / Saved Indicator -->
+          <div id="answerFeedbackNotice" class="answer-feedback hidden">
+            <span class="feedback-icon" aria-hidden="true">✓</span>
+            <span id="answerFeedbackText">Answer recorded. You can change it anytime or proceed to the next question.</span>
+          </div>
+        </div>
+
+        <!-- Question Navigation Controls -->
+        <div class="test-nav-controls">
+          <button id="prevQuestionBtn" class="btn btn-secondary" type="button" disabled>
             <svg class="btn-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M12 20h9"></path>
-              <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
+              <polyline points="15 18 9 12 15 6"></polyline>
             </svg>
-            Edit Settings
+            Previous
           </button>
-          <button id="uploadNewPdfBtn" class="btn btn-secondary" type="button">
+
+          <!-- Question Pager Quick Selector -->
+          <div id="questionQuickNav" class="question-quick-nav" aria-label="Question jump list">
+            <!-- Dynamic dot buttons rendered via JS -->
+          </div>
+
+          <button id="nextQuestionBtn" class="btn btn-primary" type="button">
+            Next Question
             <svg class="btn-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-              <polyline points="17 8 12 3 7 8"></polyline>
-              <line x1="12" y1="3" x2="12" y2="15"></line>
+              <polyline points="9 18 15 12 9 6"></polyline>
             </svg>
-            Upload Another PDF
           </button>
+        </div>
+
+        <!-- Milestone Status / Retake Footer -->
+        <div class="test-footer-bar">
+          <button id="returnToSettingsBtn" class="btn btn-secondary btn-sm" type="button">
+            ← Change Settings / Study PDF
+          </button>
+          <span class="test-milestone-tag">
+            ✓ Milestone 4 Active · All answers saved in session for Milestone 5 scoring
+          </span>
         </div>
       </section>
 

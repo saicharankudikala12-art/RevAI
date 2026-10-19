@@ -1,19 +1,24 @@
 /**
  * RevAI - Main Application Controller
- * Milestone 3: Student-Facing Revision Pipeline Flow
- * PDF Upload -> PDF Processing -> Revision Settings -> Ready to Generate
+ * Milestone 4: Gemini AI Revision Test Generation & Interactive Question Interface
+ * PDF Upload -> PDF Processing -> Revision Settings -> AI Question Generation -> Revision Test
  */
 document.addEventListener('DOMContentLoaded', () => {
   // -------------------------------------------------------------
   // Application State
   // -------------------------------------------------------------
   const state = {
-    currentStep: 1, // 1: PDF Upload, 2: Revision Settings, 3: Ready to Generate
+    currentStep: 1, // 1: PDF Upload, 2: Revision Settings, 3: Revision Test
     selectedFile: null,
     pdfResult: null, // { filename, page_count, word_count, text_length, preview, extracted_text }
     timeMinutes: 120,
     questionCount: 20,
-    isUploading: false
+    isUploading: false,
+    isGenerating: false,
+    // Milestone 4: Revision Test state
+    questions: [], // Array of question objects from Gemini
+    currentQuestionIndex: 0,
+    userAnswers: {} // Map of question index -> selected option key ("A", "B", "C", "D")
   };
 
   // -------------------------------------------------------------
@@ -74,15 +79,27 @@ document.addEventListener('DOMContentLoaded', () => {
   const paceEstimateText = document.getElementById('paceEstimateText');
   const createTestBtn = document.getElementById('createTestBtn');
 
-  // Step 3: Ready Elements
-  const stepReadySection = document.getElementById('stepReadySection');
-  const readyFilename = document.getElementById('readyFilename');
-  const readyDocStats = document.getElementById('readyDocStats');
-  const readyTime = document.getElementById('readyTime');
-  const readyQuestions = document.getElementById('readyQuestions');
-  const readyPace = document.getElementById('readyPace');
-  const editSettingsBtn = document.getElementById('editSettingsBtn');
-  const uploadNewPdfBtn = document.getElementById('uploadNewPdfBtn');
+  // Step 3: Milestone 4 AI Generation Loading State
+  const generatingLoadingSection = document.getElementById('generatingLoadingSection');
+  const genPillTime = document.getElementById('genPillTime');
+  const genPillQuestions = document.getElementById('genPillQuestions');
+  const genPillPace = document.getElementById('genPillPace');
+
+  // Step 3: Milestone 4 Revision Test Question Interface
+  const stepTestSection = document.getElementById('stepTestSection');
+  const testPaceBadge = document.getElementById('testPaceBadge');
+  const testTotalBadge = document.getElementById('testTotalBadge');
+  const questionCounterText = document.getElementById('questionCounterText');
+  const answeredCounterText = document.getElementById('answeredCounterText');
+  const testProgressBarFill = document.getElementById('testProgressBarFill');
+  const questionBadgeNum = document.getElementById('questionBadgeNum');
+  const questionPromptText = document.getElementById('questionPromptText');
+  const optionsContainer = document.getElementById('optionsContainer');
+  const answerFeedbackNotice = document.getElementById('answerFeedbackNotice');
+  const prevQuestionBtn = document.getElementById('prevQuestionBtn');
+  const nextQuestionBtn = document.getElementById('nextQuestionBtn');
+  const questionQuickNav = document.getElementById('questionQuickNav');
+  const returnToSettingsBtn = document.getElementById('returnToSettingsBtn');
 
   // Set footer API target URL
   if (footerApiUrl) {
@@ -90,11 +107,24 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // -------------------------------------------------------------
+  // Helpers
+  // -------------------------------------------------------------
+  function escapeHtml(str) {
+    if (!str) return '';
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
+
+  // -------------------------------------------------------------
   // Stepper Management
   // -------------------------------------------------------------
   /**
    * Update the stepper visualization to reflect current pipeline progress.
-   * Visual indicators per Milestone 3 specification:
+   * Visual indicators per Milestone 4 specification:
    * ✓ for completed, ● for active, ○ for upcoming/locked.
    * @param {number} step - Current step (1, 2, or 3)
    */
@@ -128,13 +158,14 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!item) return;
     item.addEventListener('click', () => {
       const targetStep = index + 1;
-      // Allow navigation to completed steps or current step
+      if (state.isGenerating || state.isUploading) return;
+
       if (targetStep === 1 && state.currentStep > 1) {
-        // Return to upload view (or show upload section)
         transitionToStep(1);
-      } else if (targetStep === 2 && state.currentStep === 3) {
-        // Return to settings view
+      } else if (targetStep === 2 && state.currentStep > 2) {
         transitionToStep(2);
+      } else if (targetStep === 3 && state.questions && state.questions.length > 0) {
+        transitionToStep(3);
       }
     });
   });
@@ -148,7 +179,8 @@ document.addEventListener('DOMContentLoaded', () => {
       // Step 1: Upload & Result view
       stepUploadSection.classList.remove('hidden');
       stepSettingsSection.classList.add('hidden');
-      stepReadySection.classList.add('hidden');
+      if (generatingLoadingSection) generatingLoadingSection.classList.add('hidden');
+      if (stepTestSection) stepTestSection.classList.add('hidden');
       updateStepper(1);
       stepUploadSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
     } else if (targetStep === 2) {
@@ -160,16 +192,24 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       stepUploadSection.classList.remove('hidden');
       stepSettingsSection.classList.remove('hidden');
-      stepReadySection.classList.add('hidden');
+      if (generatingLoadingSection) generatingLoadingSection.classList.add('hidden');
+      if (stepTestSection) stepTestSection.classList.add('hidden');
       updateStepper(2);
       stepSettingsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
     } else if (targetStep === 3) {
-      // Step 3: Ready view
+      // Step 3: Revision Test view
+      if (!state.questions || state.questions.length === 0) {
+        showError('No revision test has been generated yet. Please configure your settings and click Create Revision Test.');
+        transitionToStep(2);
+        return;
+      }
       stepUploadSection.classList.add('hidden');
       stepSettingsSection.classList.add('hidden');
-      stepReadySection.classList.remove('hidden');
+      if (generatingLoadingSection) generatingLoadingSection.classList.add('hidden');
+      if (stepTestSection) stepTestSection.classList.remove('hidden');
       updateStepper(3);
-      stepReadySection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      stepTestSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      renderCurrentQuestion();
     }
   }
 
@@ -197,11 +237,6 @@ document.addEventListener('DOMContentLoaded', () => {
   // -------------------------------------------------------------
   // Step 1: File Validation & Upload Logic
   // -------------------------------------------------------------
-  /**
-   * Validate file criteria before network transfer.
-   * @param {File} file 
-   * @returns {{valid: boolean, error?: string}}
-   */
   function validateFile(file) {
     if (!file) {
       return { valid: false, error: 'No file was selected. Please choose a PDF file.' };
@@ -228,12 +263,8 @@ document.addEventListener('DOMContentLoaded', () => {
     return { valid: true };
   }
 
-  /**
-   * Handle selected or dropped file.
-   * @param {File} file 
-   */
   async function handleFileSelected(file) {
-    if (state.isUploading) return;
+    if (state.isUploading || state.isGenerating) return;
 
     hideError();
 
@@ -261,7 +292,6 @@ document.addEventListener('DOMContentLoaded', () => {
     uploadLoadingState.classList.add('hidden');
 
     if (!response.success) {
-      // Restore dropzone and show error
       dropZone.classList.remove('hidden');
       showError(response.error || 'Failed to process PDF.');
       return;
@@ -293,21 +323,18 @@ document.addEventListener('DOMContentLoaded', () => {
     stepSettingsSection.classList.remove('hidden');
     updateStepper(2);
 
-    // Smooth scroll down to settings
     setTimeout(() => {
       stepSettingsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }, 150);
   }
 
-  // -------------------------------------------------------------
-  // Drag & Drop Event Listeners
-  // -------------------------------------------------------------
+  // Drag & Drop
   if (dropZone) {
     ['dragenter', 'dragover'].forEach(eventName => {
       dropZone.addEventListener(eventName, (e) => {
         e.preventDefault();
         e.stopPropagation();
-        if (state.isUploading) return;
+        if (state.isUploading || state.isGenerating) return;
         dropZone.classList.add('dragover');
       });
     });
@@ -321,26 +348,24 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     dropZone.addEventListener('drop', (e) => {
-      if (state.isUploading) return;
+      if (state.isUploading || state.isGenerating) return;
       const files = e.dataTransfer.files;
       if (files && files.length > 0) {
         handleFileSelected(files[0]);
       }
     });
 
-    // Clicking dropzone opens file picker if not clicking Choose PDF button directly
     dropZone.addEventListener('click', (e) => {
-      if (state.isUploading) return;
+      if (state.isUploading || state.isGenerating) return;
       if (e.target !== choosePdfBtn && !choosePdfBtn.contains(e.target)) {
         if (pdfFileInput) pdfFileInput.click();
       }
     });
 
-    // Keyboard support for drop zone accessibility
     dropZone.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' || e.key === ' ') {
         e.preventDefault();
-        if (pdfFileInput && !state.isUploading) {
+        if (pdfFileInput && !state.isUploading && !state.isGenerating) {
           pdfFileInput.click();
         }
       }
@@ -351,7 +376,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (choosePdfBtn) {
     choosePdfBtn.addEventListener('click', (e) => {
       e.stopPropagation();
-      if (state.isUploading) return;
+      if (state.isUploading || state.isGenerating) return;
       if (pdfFileInput) pdfFileInput.click();
     });
   }
@@ -361,17 +386,20 @@ document.addEventListener('DOMContentLoaded', () => {
     pdfFileInput.addEventListener('change', () => {
       if (pdfFileInput.files && pdfFileInput.files.length > 0) {
         handleFileSelected(pdfFileInput.files[0]);
-        // Reset input value so re-selecting same file triggers change
         pdfFileInput.value = '';
       }
     });
   }
 
-  // Change PDF / Upload Another PDF
+  // Change PDF / Reset
   function resetToUpload() {
     state.selectedFile = null;
     state.pdfResult = null;
     state.isUploading = false;
+    state.isGenerating = false;
+    state.questions = [];
+    state.currentQuestionIndex = 0;
+    state.userAnswers = {};
 
     hideError();
 
@@ -380,7 +408,8 @@ document.addEventListener('DOMContentLoaded', () => {
     uploadLoadingState.classList.add('hidden');
     pdfResultSection.classList.add('hidden');
     stepSettingsSection.classList.add('hidden');
-    stepReadySection.classList.add('hidden');
+    if (generatingLoadingSection) generatingLoadingSection.classList.add('hidden');
+    if (stepTestSection) stepTestSection.classList.add('hidden');
     stepUploadSection.classList.remove('hidden');
 
     updateStepper(1);
@@ -391,16 +420,9 @@ document.addEventListener('DOMContentLoaded', () => {
     changePdfBtn.addEventListener('click', resetToUpload);
   }
 
-  if (uploadNewPdfBtn) {
-    uploadNewPdfBtn.addEventListener('click', resetToUpload);
-  }
-
   // -------------------------------------------------------------
   // Step 2: Revision Settings Validation & Logic
   // -------------------------------------------------------------
-  /**
-   * Recalculate and display the pacing estimate.
-   */
   function updatePaceEstimate() {
     const rawTime = parseFloat(timeInput.value);
     const rawQuestions = parseFloat(questionsInput.value);
@@ -416,10 +438,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  /**
-   * Validate the Time Remaining input.
-   * @returns {{valid: boolean, value?: number, error?: string}}
-   */
   function validateTimeInput() {
     const rawValue = timeInput.value.trim();
     if (!rawValue) {
@@ -438,10 +456,6 @@ document.addEventListener('DOMContentLoaded', () => {
     return { valid: true, value: num };
   }
 
-  /**
-   * Validate the Target Question Count input.
-   * @returns {{valid: boolean, value?: number, error?: string}}
-   */
   function validateQuestionsInput() {
     const rawValue = questionsInput.value.trim();
     if (!rawValue) {
@@ -467,10 +481,8 @@ document.addEventListener('DOMContentLoaded', () => {
     return { valid: true, value: num };
   }
 
-  // Live input events for Time
   if (timeInput) {
     timeInput.addEventListener('input', () => {
-      // Clear error on input
       timeInput.classList.remove('has-error');
       if (timeError) timeError.classList.add('hidden');
       updatePaceEstimate();
@@ -478,10 +490,8 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Live input events for Questions
   if (questionsInput) {
     questionsInput.addEventListener('input', () => {
-      // Clear error on input
       questionsInput.classList.remove('has-error');
       if (questionsError) questionsError.classList.add('hidden');
       updatePaceEstimate();
@@ -489,9 +499,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  /**
-   * Sync active preset chip with manual input value.
-   */
   function syncPresetChip(container, value) {
     if (!container) return;
     const chips = container.querySelectorAll('.preset-chip');
@@ -505,7 +512,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Preset Chips: Time
   if (timePresets) {
     timePresets.addEventListener('click', (e) => {
       const chip = e.target.closest('.preset-chip');
@@ -521,7 +527,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Preset Chips: Questions
   if (questionsPresets) {
     questionsPresets.addEventListener('click', (e) => {
       const chip = e.target.closest('.preset-chip');
@@ -537,17 +542,18 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Initialize pace estimate on page load
   updatePaceEstimate();
 
   // -------------------------------------------------------------
-  // Step 2 -> Step 3: Create Revision Test Button
+  // Step 2 -> Step 3: Create Revision Test Button (Gemini AI Call)
   // -------------------------------------------------------------
   if (createTestBtn) {
-    createTestBtn.addEventListener('click', () => {
+    createTestBtn.addEventListener('click', async () => {
+      if (state.isGenerating) return;
+
       // 1. Verify PDF has been processed
-      if (!state.pdfResult) {
-        showError('Please upload and process a study PDF before configuring settings.');
+      if (!state.pdfResult || !state.pdfResult.extracted_text) {
+        showError('Please upload and process a study PDF before generating a revision test.');
         transitionToStep(1);
         return;
       }
@@ -589,30 +595,235 @@ document.addEventListener('DOMContentLoaded', () => {
       // 4. Store validated values in frontend state
       state.timeMinutes = timeValidation.value;
       state.questionCount = questionsValidation.value;
+      state.isGenerating = true;
+      createTestBtn.disabled = true;
+      hideError();
 
-      // 5. Populate Ready View Summary
-      if (readyFilename) readyFilename.textContent = state.pdfResult.filename;
-      if (readyDocStats) {
-        readyDocStats.textContent = `${state.pdfResult.page_count} ${state.pdfResult.page_count === 1 ? 'page' : 'pages'} · ${state.pdfResult.word_count.toLocaleString()} words`;
-      }
-      if (readyTime) readyTime.textContent = `${state.timeMinutes} minutes`;
-      if (readyQuestions) readyQuestions.textContent = `${state.questionCount}`;
-      if (readyPace) {
-        const pace = (state.timeMinutes / state.questionCount).toFixed(1);
-        readyPace.textContent = `${pace} min per question`;
+      // 5. Update Loading View Details
+      const pace = (state.timeMinutes / state.questionCount).toFixed(1);
+      if (genPillTime) genPillTime.textContent = `⏱️ ${state.timeMinutes} minutes`;
+      if (genPillQuestions) genPillQuestions.textContent = `📝 ${state.questionCount} questions`;
+      if (genPillPace) genPillPace.textContent = `⚡ ~${pace} min/q`;
+
+      // 6. Reveal AI Generation Loading Section
+      stepUploadSection.classList.add('hidden');
+      stepSettingsSection.classList.add('hidden');
+      if (stepTestSection) stepTestSection.classList.add('hidden');
+      if (generatingLoadingSection) {
+        generatingLoadingSection.classList.remove('hidden');
+        generatingLoadingSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }
 
-      // 6. Transition to Step 3 (Ready State)
+      // 7. Request Question Generation from Backend via POST /api/revision/generate
+      const response = await API.generateRevisionTest(
+        state.pdfResult.extracted_text,
+        state.timeMinutes,
+        state.questionCount
+      );
+
+      state.isGenerating = false;
+      createTestBtn.disabled = false;
+      if (generatingLoadingSection) generatingLoadingSection.classList.add('hidden');
+
+      if (!response.success) {
+        // Show error and return to settings so student can retry or adjust
+        stepUploadSection.classList.remove('hidden');
+        stepSettingsSection.classList.remove('hidden');
+        updateStepper(2);
+        showError(response.error || "We couldn't generate your revision test right now. Please try again.");
+        return;
+      }
+
+      // 8. Successful AI Generation
+      const data = response.data;
+      if (!data.questions || data.questions.length === 0) {
+        stepUploadSection.classList.remove('hidden');
+        stepSettingsSection.classList.remove('hidden');
+        updateStepper(2);
+        showError("We couldn't generate your revision test right now. Please try again.");
+        return;
+      }
+
+      // 9. Store Questions in Frontend State (Cached so questions are not re-generated on next/prev)
+      state.questions = data.questions;
+      state.currentQuestionIndex = 0;
+      state.userAnswers = {};
+
+      // 10. Transition to Step 3 (Revision Test)
       transitionToStep(3);
-
-      /* IMPORTANT: DO NOT call Gemini API or generate fake questions here.
-         Milestone 3 concludes at this verified 'Ready to Generate' state. */
     });
   }
 
-  // Edit Settings button (returns from Ready state back to Step 2)
-  if (editSettingsBtn) {
-    editSettingsBtn.addEventListener('click', () => {
+  // -------------------------------------------------------------
+  // Milestone 4: Revision Test Interactive UI Logic
+  // -------------------------------------------------------------
+  /**
+   * Render the current question, options, progress counter, and navigation state.
+   */
+  function renderCurrentQuestion() {
+    if (!state.questions || state.questions.length === 0) return;
+
+    const currentQ = state.questions[state.currentQuestionIndex];
+    if (!currentQ) return;
+
+    const totalQuestions = state.questions.length;
+    const currentNum = state.currentQuestionIndex + 1;
+
+    // 1. Update Header Badges & Progress Labels
+    if (questionBadgeNum) questionBadgeNum.textContent = `Q${currentNum}`;
+    if (questionPromptText) questionPromptText.textContent = currentQ.question;
+    if (questionCounterText) {
+      questionCounterText.textContent = `Question ${currentNum} of ${totalQuestions}`;
+    }
+
+    const answeredCount = Object.keys(state.userAnswers).length;
+    if (answeredCounterText) {
+      answeredCounterText.textContent = `${answeredCount} of ${totalQuestions} answered`;
+    }
+
+    // 2. Progress Bar Fill
+    if (testProgressBarFill) {
+      const pct = Math.round((currentNum / totalQuestions) * 100);
+      testProgressBarFill.style.width = `${pct}%`;
+    }
+
+    // 3. Top Stats
+    if (testTotalBadge) testTotalBadge.textContent = `📝 ${totalQuestions} Questions`;
+    if (testPaceBadge) {
+      const pace = (state.timeMinutes / totalQuestions).toFixed(1);
+      testPaceBadge.textContent = `⏱️ Pacing: ~${pace} min/q`;
+    }
+
+    // 4. Render Options (A, B, C, D)
+    if (optionsContainer) {
+      optionsContainer.innerHTML = '';
+      const selectedOption = state.userAnswers[state.currentQuestionIndex];
+
+      const optionKeys = ['A', 'B', 'C', 'D'];
+      optionKeys.forEach(optKey => {
+        const optionContent = (currentQ.options && currentQ.options[optKey]) || '';
+        const isSelected = selectedOption === optKey;
+
+        const optBtn = document.createElement('button');
+        optBtn.type = 'button';
+        optBtn.className = `option-item${isSelected ? ' selected' : ''}`;
+        optBtn.setAttribute('role', 'radio');
+        optBtn.setAttribute('aria-checked', isSelected ? 'true' : 'false');
+        optBtn.dataset.option = optKey;
+
+        optBtn.innerHTML = `
+          <span class="option-indicator">${optKey}</span>
+          <span class="option-text">${escapeHtml(optionContent)}</span>
+          <span class="option-check" aria-hidden="true">✓</span>
+        `;
+
+        optBtn.addEventListener('click', () => {
+          selectAnswer(optKey);
+        });
+
+        optionsContainer.appendChild(optBtn);
+      });
+    }
+
+    // 5. Answer Feedback
+    if (answerFeedbackNotice) {
+      if (state.userAnswers[state.currentQuestionIndex]) {
+        answerFeedbackNotice.classList.remove('hidden');
+      } else {
+        answerFeedbackNotice.classList.add('hidden');
+      }
+    }
+
+    // 6. Navigation Controls
+    if (prevQuestionBtn) {
+      prevQuestionBtn.disabled = (state.currentQuestionIndex === 0);
+    }
+
+    if (nextQuestionBtn) {
+      if (state.currentQuestionIndex === totalQuestions - 1) {
+        nextQuestionBtn.innerHTML = `
+          Finish Review
+          <svg class="btn-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="20 6 9 17 4 12"></polyline>
+          </svg>
+        `;
+      } else {
+        nextQuestionBtn.innerHTML = `
+          Next Question
+          <svg class="btn-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="9 18 15 12 9 6"></polyline>
+          </svg>
+        `;
+      }
+    }
+
+    // 7. Render Quick Question Navigator Dots
+    if (questionQuickNav) {
+      questionQuickNav.innerHTML = '';
+      state.questions.forEach((_, idx) => {
+        const dot = document.createElement('button');
+        dot.type = 'button';
+        const isCurrent = (idx === state.currentQuestionIndex);
+        const isAnswered = Boolean(state.userAnswers[idx]);
+
+        dot.className = `quick-dot${isCurrent ? ' current' : ''}${isAnswered && !isCurrent ? ' answered' : ''}`;
+        dot.textContent = idx + 1;
+        dot.setAttribute('aria-label', `Go to Question ${idx + 1}`);
+
+        dot.addEventListener('click', () => {
+          state.currentQuestionIndex = idx;
+          renderCurrentQuestion();
+        });
+
+        questionQuickNav.appendChild(dot);
+      });
+    }
+  }
+
+  /**
+   * Handle user selection of an answer choice.
+   * Stored in state only (no Gemini call, no final scoring in Milestone 4).
+   * @param {string} optionKey - "A", "B", "C", or "D"
+   */
+  function selectAnswer(optionKey) {
+    state.userAnswers[state.currentQuestionIndex] = optionKey;
+    renderCurrentQuestion();
+  }
+
+  // Previous Question Button
+  if (prevQuestionBtn) {
+    prevQuestionBtn.addEventListener('click', () => {
+      if (state.currentQuestionIndex > 0) {
+        state.currentQuestionIndex--;
+        renderCurrentQuestion();
+      }
+    });
+  }
+
+  // Next Question Button
+  if (nextQuestionBtn) {
+    nextQuestionBtn.addEventListener('click', () => {
+      if (state.currentQuestionIndex < state.questions.length - 1) {
+        state.currentQuestionIndex++;
+        renderCurrentQuestion();
+      } else {
+        // Student is on the last question
+        const answered = Object.keys(state.userAnswers).length;
+        const total = state.questions.length;
+        if (answerFeedbackNotice) {
+          answerFeedbackNotice.classList.remove('hidden');
+          const feedbackText = document.getElementById('answerFeedbackText');
+          if (feedbackText) {
+            feedbackText.textContent = `You've reviewed all ${total} questions (${answered} answered). Answers are stored in session for Milestone 5 scoring!`;
+          }
+        }
+      }
+    });
+  }
+
+  // Return to Settings / Edit PDF Button
+  if (returnToSettingsBtn) {
+    returnToSettingsBtn.addEventListener('click', () => {
       transitionToStep(2);
     });
   }
