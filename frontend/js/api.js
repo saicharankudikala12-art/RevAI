@@ -170,7 +170,59 @@ const API = {
         status: 0,
         error: 'Unable to connect to RevAI backend server at http://127.0.0.1:8000. Please ensure the backend is running.'
       };
+  },
+
+  /**
+   * Submit test answers for objective server-side scoring and detailed explanation review.
+   * @param {object} payload - { test_token?: string, questions?: Array, user_answers: object, time_spent_seconds?: number }
+   * @returns {Promise<{success: boolean, data?: object, status?: number, error?: string}>}
+   */
+  async submitRevisionTest(payload) {
+    try {
+      const response = await fetch(`${CONFIG.API_BASE_URL}/revision/submit`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      });
+
+      let json = null;
+      try {
+        json = await response.json();
+      } catch (parseErr) {
+        json = null;
+      }
+
+      if (!response.ok) {
+        let errorMsg = 'Failed to submit test.';
+        if (json && json.detail) {
+          if (typeof json.detail === 'string') {
+            errorMsg = json.detail;
+          } else if (Array.isArray(json.detail)) {
+            errorMsg = json.detail.map(d => d.msg || d.detail || JSON.stringify(d)).join('; ');
+          }
+        }
+        return {
+          success: false,
+          status: response.status,
+          error: errorMsg
+        };
+      }
+
+      return {
+        success: true,
+        data: json
+      };
+    } catch (err) {
+      return {
+        success: false,
+        status: 0,
+        error: 'Unable to connect to RevAI backend server at http://127.0.0.1:8000. Please ensure the backend is running.'
+      };
     }
   }
 };
+
 

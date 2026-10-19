@@ -37,12 +37,19 @@ class APIErrorResponse(BaseModel):
 
 
 class QuestionItem(BaseModel):
-    """Schema for a single multiple-choice revision question."""
+    """Schema for a single multiple-choice revision question (server-side, includes answer & explanation)."""
     id: int = Field(description="1-based question number")
     question: str = Field(description="The question prompt")
     options: dict[str, str] = Field(description="Four choices keyed by A, B, C, D")
     correct_answer: str = Field(description="Correct choice identifier: A, B, C, or D")
     explanation: str = Field(description="Clear explanation of the correct choice")
+
+
+class QuestionClientItem(BaseModel):
+    """Client-facing question schema (omits correct_answer and explanation before submission)."""
+    id: int = Field(description="1-based question number")
+    question: str = Field(description="The question prompt")
+    options: dict[str, str] = Field(description="Four choices keyed by A, B, C, D")
 
 
 class RevisionGenerateRequest(BaseModel):
@@ -60,4 +67,41 @@ class RevisionGenerateResponse(BaseModel):
     time_remaining: int = Field(description="Study time allocated in minutes")
     question_count: int = Field(description="Total number of generated questions")
     questions: list[QuestionItem] = Field(description="List of structured revision questions")
+    test_token: Optional[str] = Field(default=None, description="HMAC-signed tamper-proof test token containing authoritative answer key")
+
+
+class TestSubmissionRequest(BaseModel):
+    """Request payload for submitting answers to be scored."""
+    test_token: Optional[str] = Field(default=None, description="HMAC-signed test token provided at generation time")
+    # For compatibility if client submits with original questions or token
+    questions: Optional[list[QuestionItem]] = Field(default=None, description="Authoritative questions if token is omitted")
+    user_answers: dict[str, Optional[str]] = Field(default_factory=dict, description="Map of question_id (as str or int) to selected option ('A', 'B', 'C', 'D' or null)")
+    time_spent_seconds: Optional[int] = Field(default=None, ge=0, description="Optional time spent in seconds")
+
+
+class QuestionReviewItem(BaseModel):
+    """Detailed review item for each question after test grading."""
+    id: int = Field(description="1-based question number")
+    question: str = Field(description="The question prompt")
+    options: dict[str, str] = Field(description="All four options")
+    user_answer: Optional[str] = Field(default=None, description="User's selected option identifier or None if unanswered")
+    correct_answer: str = Field(description="Authoritative correct option identifier: A, B, C, or D")
+    is_correct: bool = Field(description="Whether the user answered correctly")
+    is_answered: bool = Field(description="Whether the user attempted this question")
+    explanation: str = Field(description="Explanation of the correct answer from AI study generation")
+
+
+class TestSubmissionResponse(BaseModel):
+    """Graded result and analysis payload for a submitted test."""
+    success: bool = Field(default=True, description="Whether test grading succeeded")
+    total_questions: int = Field(description="Total number of questions in test")
+    correct_count: int = Field(description="Number of correctly answered questions")
+    incorrect_count: int = Field(description="Number of incorrectly answered questions")
+    unanswered_count: int = Field(description="Number of unanswered questions")
+    score_percentage: float = Field(description="Score percentage rounded to 1 decimal place (0.0 - 100.0)")
+    performance_rating: str = Field(description="Performance rating: Excellent, Good, Fair, Needs Review")
+    performance_summary: str = Field(description="Actionable summary text evaluating the student's revision performance")
+    time_spent_seconds: Optional[int] = Field(default=None, description="Time spent taking the test in seconds")
+    questions_review: list[QuestionReviewItem] = Field(description="Per-question review breakdown with answers and explanations")
+
 

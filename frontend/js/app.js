@@ -8,18 +8,24 @@ document.addEventListener('DOMContentLoaded', () => {
   // Application State
   // -------------------------------------------------------------
   const state = {
-    currentStep: 1, // 1: PDF Upload, 2: Revision Settings, 3: Revision Test
+    currentStep: 1, // 1: PDF Upload, 2: Revision Settings, 3: Revision Test, 4: Results & Review
     selectedFile: null,
     pdfResult: null, // { filename, page_count, word_count, text_length, preview, extracted_text }
     timeMinutes: 120,
     questionCount: 20,
     isUploading: false,
     isGenerating: false,
-    // Milestone 4: Revision Test state
+    // Milestone 4 & 5: Revision Test state
     questions: [], // Array of question objects from Gemini
     provider: 'gemini', // 'gemini' or 'heuristic-fallback'
+    testToken: null, // HMAC signed token from backend
+    testStartTime: null, // Timestamp when test began
     currentQuestionIndex: 0,
-    userAnswers: {} // Map of question index -> selected option key ("A", "B", "C", "D")
+    userAnswers: {}, // Map of question index (0 to N-1) -> selected option key ("A", "B", "C", "D")
+    isSubmitting: false,
+    isSubmitted: false,
+    submissionResult: null, // TestSubmissionResponse object
+    activeReviewFilter: 'all' // 'all', 'incorrect', 'unanswered', 'correct'
   };
 
   // -------------------------------------------------------------
@@ -86,7 +92,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const genPillQuestions = document.getElementById('genPillQuestions');
   const genPillPace = document.getElementById('genPillPace');
 
-  // Step 3: Milestone 4 Revision Test Question Interface
+  // Step 3: Revision Test Question Interface
   const stepTestSection = document.getElementById('stepTestSection');
   const testProviderBadge = document.getElementById('testProviderBadge');
   const testPaceBadge = document.getElementById('testPaceBadge');
@@ -100,8 +106,42 @@ document.addEventListener('DOMContentLoaded', () => {
   const answerFeedbackNotice = document.getElementById('answerFeedbackNotice');
   const prevQuestionBtn = document.getElementById('prevQuestionBtn');
   const nextQuestionBtn = document.getElementById('nextQuestionBtn');
+  const submitTestBtn = document.getElementById('submitTestBtn');
   const questionQuickNav = document.getElementById('questionQuickNav');
   const returnToSettingsBtn = document.getElementById('returnToSettingsBtn');
+
+  // Milestone 5: Submission Confirmation Modal Elements
+  const submitConfirmModal = document.getElementById('submitConfirmModal');
+  const modalWarningBox = document.getElementById('modalWarningBox');
+  const modalWarningText = document.getElementById('modalWarningText');
+  const modalTotalQuestions = document.getElementById('modalTotalQuestions');
+  const modalAnsweredCount = document.getElementById('modalAnsweredCount');
+  const modalUnansweredCount = document.getElementById('modalUnansweredCount');
+  const cancelSubmitBtn = document.getElementById('cancelSubmitBtn');
+  const confirmSubmitBtn = document.getElementById('confirmSubmitBtn');
+
+  // Step 4: Milestone 5 Results Dashboard Elements
+  const stepResultsSection = document.getElementById('stepResultsSection');
+  const resultScorePercentage = document.getElementById('resultScorePercentage');
+  const resultPerformanceRating = document.getElementById('resultPerformanceRating');
+  const resultPerformanceSummary = document.getElementById('resultPerformanceSummary');
+  const resultMetaStudyTime = document.getElementById('resultMetaStudyTime');
+  const resultMetaProvider = document.getElementById('resultMetaProvider');
+  const resultMetaTimeSpent = document.getElementById('resultMetaTimeSpent');
+  const statCorrectCount = document.getElementById('statCorrectCount');
+  const statIncorrectCount = document.getElementById('statIncorrectCount');
+  const statUnansweredCount = document.getElementById('statUnansweredCount');
+  const statTotalCount = document.getElementById('statTotalCount');
+  const scrollToReviewBtn = document.getElementById('scrollToReviewBtn');
+  const restartSameTestBtn = document.getElementById('restartSameTestBtn');
+  const newTestSettingsBtn = document.getElementById('newTestSettingsBtn');
+  const startOverUploadBtn = document.getElementById('startOverUploadBtn');
+  const answerReviewSection = document.getElementById('answerReviewSection');
+  const reviewQuestionsContainer = document.getElementById('reviewQuestionsContainer');
+  const filterCountAll = document.getElementById('filterCountAll');
+  const filterCountIncorrect = document.getElementById('filterCountIncorrect');
+  const filterCountUnanswered = document.getElementById('filterCountUnanswered');
+  const filterCountCorrect = document.getElementById('filterCountCorrect');
 
   // Set footer API target URL
   if (footerApiUrl) {
@@ -126,30 +166,26 @@ document.addEventListener('DOMContentLoaded', () => {
   // -------------------------------------------------------------
   /**
    * Update the stepper visualization to reflect current pipeline progress.
-   * Visual indicators per Milestone 4 specification:
+   * Visual indicators:
    * ✓ for completed, ● for active, ○ for upcoming/locked.
-   * @param {number} step - Current step (1, 2, or 3)
+   * @param {number} step - Current step (1, 2, 3, or 4)
    */
   function updateStepper(step) {
     state.currentStep = step;
 
-    // Reset base styles
     stepItems.forEach((item, index) => {
       if (!item) return;
       item.classList.remove('active', 'completed', 'clickable');
       const icon = stepIcons[index];
-
       const stepNum = index + 1;
+
       if (stepNum < step) {
-        // Step completed
         item.classList.add('completed', 'clickable');
         if (icon) icon.textContent = '✓';
       } else if (stepNum === step) {
-        // Current active step
         item.classList.add('active');
         if (icon) icon.textContent = '●';
       } else {
-        // Upcoming locked step
         if (icon) icon.textContent = '○';
       }
     });
@@ -160,7 +196,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!item) return;
     item.addEventListener('click', () => {
       const targetStep = index + 1;
-      if (state.isGenerating || state.isUploading) return;
+      if (state.isGenerating || state.isUploading || state.isSubmitting) return;
 
       if (targetStep === 1 && state.currentStep > 1) {
         transitionToStep(1);
@@ -168,6 +204,8 @@ document.addEventListener('DOMContentLoaded', () => {
         transitionToStep(2);
       } else if (targetStep === 3 && state.questions && state.questions.length > 0) {
         transitionToStep(3);
+      } else if (targetStep === 4 && state.isSubmitted && state.submissionResult) {
+        transitionToStep(4);
       }
     });
   });
@@ -178,15 +216,14 @@ document.addEventListener('DOMContentLoaded', () => {
    */
   function transitionToStep(targetStep) {
     if (targetStep === 1) {
-      // Step 1: Upload & Result view
       stepUploadSection.classList.remove('hidden');
       stepSettingsSection.classList.add('hidden');
       if (generatingLoadingSection) generatingLoadingSection.classList.add('hidden');
       if (stepTestSection) stepTestSection.classList.add('hidden');
+      if (stepResultsSection) stepResultsSection.classList.add('hidden');
       updateStepper(1);
       stepUploadSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
     } else if (targetStep === 2) {
-      // Step 2: Settings view
       if (!state.pdfResult) {
         showError('Please upload and process a study PDF first.');
         transitionToStep(1);
@@ -196,10 +233,10 @@ document.addEventListener('DOMContentLoaded', () => {
       stepSettingsSection.classList.remove('hidden');
       if (generatingLoadingSection) generatingLoadingSection.classList.add('hidden');
       if (stepTestSection) stepTestSection.classList.add('hidden');
+      if (stepResultsSection) stepResultsSection.classList.add('hidden');
       updateStepper(2);
       stepSettingsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
     } else if (targetStep === 3) {
-      // Step 3: Revision Test view
       if (!state.questions || state.questions.length === 0) {
         showError('No revision test has been generated yet. Please configure your settings and click Create Revision Test.');
         transitionToStep(2);
@@ -208,12 +245,28 @@ document.addEventListener('DOMContentLoaded', () => {
       stepUploadSection.classList.add('hidden');
       stepSettingsSection.classList.add('hidden');
       if (generatingLoadingSection) generatingLoadingSection.classList.add('hidden');
+      if (stepResultsSection) stepResultsSection.classList.add('hidden');
       if (stepTestSection) stepTestSection.classList.remove('hidden');
       updateStepper(3);
       stepTestSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
       renderCurrentQuestion();
+    } else if (targetStep === 4) {
+      if (!state.submissionResult) {
+        showError('Please complete and submit your revision test to view results.');
+        transitionToStep(3);
+        return;
+      }
+      stepUploadSection.classList.add('hidden');
+      stepSettingsSection.classList.add('hidden');
+      if (generatingLoadingSection) generatingLoadingSection.classList.add('hidden');
+      if (stepTestSection) stepTestSection.classList.add('hidden');
+      if (stepResultsSection) stepResultsSection.classList.remove('hidden');
+      updateStepper(4);
+      stepResultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      renderResultsDashboard();
     }
   }
+
 
   // -------------------------------------------------------------
   // Error Banner Helper
@@ -402,8 +455,14 @@ document.addEventListener('DOMContentLoaded', () => {
     state.questions = [];
     state.currentQuestionIndex = 0;
     state.userAnswers = {};
+    state.testToken = null;
+    state.testStartTime = null;
+    state.isSubmitting = false;
+    state.isSubmitted = false;
+    state.submissionResult = null;
 
     hideError();
+    closeSubmitModal();
 
     // Reset UI visibility
     dropZone.classList.remove('hidden');
@@ -412,11 +471,13 @@ document.addEventListener('DOMContentLoaded', () => {
     stepSettingsSection.classList.add('hidden');
     if (generatingLoadingSection) generatingLoadingSection.classList.add('hidden');
     if (stepTestSection) stepTestSection.classList.add('hidden');
+    if (stepResultsSection) stepResultsSection.classList.add('hidden');
     stepUploadSection.classList.remove('hidden');
 
     updateStepper(1);
     stepUploadSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
+
 
   if (changePdfBtn) {
     changePdfBtn.addEventListener('click', resetToUpload);
@@ -649,11 +710,16 @@ document.addEventListener('DOMContentLoaded', () => {
       // 9. Store Questions in Frontend State (Cached so questions are not re-generated on next/prev)
       state.questions = data.questions;
       state.provider = data.provider || 'gemini';
+      state.testToken = data.test_token || null;
+      state.testStartTime = Date.now();
       state.currentQuestionIndex = 0;
       state.userAnswers = {};
+      state.isSubmitted = false;
+      state.submissionResult = null;
 
       // 10. Transition to Step 3 (Revision Test)
       transitionToStep(3);
+
     });
   }
 
@@ -794,10 +860,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
   /**
    * Handle user selection of an answer choice.
-   * Stored in state only (no Gemini call, no final scoring in Milestone 4).
+   * If test is already submitted, answers are locked.
    * @param {string} optionKey - "A", "B", "C", or "D"
    */
   function selectAnswer(optionKey) {
+    if (state.isSubmitted) return;
     state.userAnswers[state.currentQuestionIndex] = optionKey;
     renderCurrentQuestion();
   }
@@ -819,16 +886,8 @@ document.addEventListener('DOMContentLoaded', () => {
         state.currentQuestionIndex++;
         renderCurrentQuestion();
       } else {
-        // Student is on the last question
-        const answered = Object.keys(state.userAnswers).length;
-        const total = state.questions.length;
-        if (answerFeedbackNotice) {
-          answerFeedbackNotice.classList.remove('hidden');
-          const feedbackText = document.getElementById('answerFeedbackText');
-          if (feedbackText) {
-            feedbackText.textContent = `You've reviewed all ${total} questions (${answered} answered). Answers are stored in session for Milestone 5 scoring!`;
-          }
-        }
+        // When on last question, clicking Next prompts user to submit
+        openSubmitModal();
       }
     });
   }
@@ -836,7 +895,325 @@ document.addEventListener('DOMContentLoaded', () => {
   // Return to Settings / Edit PDF Button
   if (returnToSettingsBtn) {
     returnToSettingsBtn.addEventListener('click', () => {
+      if (state.isSubmitted) {
+        transitionToStep(2);
+      } else {
+        const confirmed = window.confirm("Return to revision settings? Your current test answers will be retained in this session.");
+        if (confirmed) {
+          transitionToStep(2);
+        }
+      }
+    });
+  }
+
+  // -------------------------------------------------------------
+  // Milestone 5: Submit Confirmation Modal & Test Submission
+  // -------------------------------------------------------------
+  function openSubmitModal() {
+    if (state.isSubmitting || state.isSubmitted) return;
+
+    const totalQuestions = state.questions.length;
+    const answeredCount = Object.keys(state.userAnswers).length;
+    const unansweredCount = totalQuestions - answeredCount;
+
+    if (modalTotalQuestions) modalTotalQuestions.textContent = totalQuestions;
+    if (modalAnsweredCount) modalAnsweredCount.textContent = answeredCount;
+    if (modalUnansweredCount) modalUnansweredCount.textContent = unansweredCount;
+
+    if (modalWarningBox && modalWarningText) {
+      if (unansweredCount > 0) {
+        modalWarningText.textContent = `You have ${unansweredCount} unanswered question${unansweredCount === 1 ? '' : 's'}. They will be marked as unanswered upon submission.`;
+        modalWarningBox.classList.remove('hidden');
+      } else {
+        modalWarningBox.classList.add('hidden');
+      }
+    }
+
+    if (submitConfirmModal) {
+      submitConfirmModal.classList.remove('hidden');
+    }
+  }
+
+  function closeSubmitModal() {
+    if (submitConfirmModal) {
+      submitConfirmModal.classList.add('hidden');
+    }
+  }
+
+  if (submitTestBtn) {
+    submitTestBtn.addEventListener('click', openSubmitModal);
+  }
+
+  if (cancelSubmitBtn) {
+    cancelSubmitBtn.addEventListener('click', closeSubmitModal);
+  }
+
+  // Dismiss modal when clicking background overlay
+  if (submitConfirmModal) {
+    submitConfirmModal.addEventListener('click', (e) => {
+      if (e.target === submitConfirmModal) {
+        closeSubmitModal();
+      }
+    });
+  }
+
+  // Final Confirmed Submission
+  if (confirmSubmitBtn) {
+    confirmSubmitBtn.addEventListener('click', async () => {
+      if (state.isSubmitting || state.isSubmitted) return;
+
+      state.isSubmitting = true;
+      confirmSubmitBtn.disabled = true;
+      confirmSubmitBtn.textContent = 'Submitting...';
+
+      const timeSpentSeconds = state.testStartTime
+        ? Math.max(1, Math.round((Date.now() - state.testStartTime) / 1000))
+        : null;
+
+      // Construct server payload.
+      // Use HMAC-signed test_token for tamper-proof verification, or full questions array if token unavailable.
+      const payload = {
+        test_token: state.testToken || null,
+        questions: state.testToken ? null : state.questions,
+        user_answers: state.userAnswers,
+        time_spent_seconds: timeSpentSeconds
+      };
+
+      const response = await API.submitRevisionTest(payload);
+
+      state.isSubmitting = false;
+      confirmSubmitBtn.disabled = false;
+      confirmSubmitBtn.textContent = 'Confirm & Submit';
+      closeSubmitModal();
+
+      if (!response.success) {
+        showError(response.error || 'Failed to submit test. Please try again.');
+        return;
+      }
+
+      // Mark test as submitted & lock answers
+      state.isSubmitted = true;
+      state.submissionResult = response.data;
+
+      // Transition to Step 4 Results & Analysis
+      transitionToStep(4);
+    });
+  }
+
+  // -------------------------------------------------------------
+  // Milestone 5: Results Dashboard & Detailed Answer Review
+  // -------------------------------------------------------------
+  function renderResultsDashboard() {
+    const result = state.submissionResult;
+    if (!result) return;
+
+    // 1. Overall Score & Percentage
+    if (resultScorePercentage) {
+      resultScorePercentage.textContent = `${result.score_percentage}%`;
+    }
+
+    // 2. Performance Rating & Summary
+    if (resultPerformanceRating) {
+      resultPerformanceRating.textContent = result.performance_rating || 'Good';
+      const ratingClass = String(result.performance_rating || '').toLowerCase().replace(/\s+/g, '-');
+      resultPerformanceRating.className = `rating-badge ${ratingClass}`;
+    }
+
+    if (resultPerformanceSummary) {
+      resultPerformanceSummary.textContent = result.performance_summary || '';
+    }
+
+    // 3. Meta tags (study time, provider, duration)
+    if (resultMetaStudyTime) {
+      resultMetaStudyTime.textContent = `⏱️ ${state.timeMinutes} min allocated`;
+    }
+    if (resultMetaProvider) {
+      resultMetaProvider.textContent = state.provider === 'heuristic-fallback'
+        ? '📋 Study Notes Fallback'
+        : '🤖 Gemini AI';
+    }
+    if (resultMetaTimeSpent) {
+      if (result.time_spent_seconds && result.time_spent_seconds > 0) {
+        const mins = Math.floor(result.time_spent_seconds / 60);
+        const secs = result.time_spent_seconds % 60;
+        resultMetaTimeSpent.textContent = `⏳ Test Time: ${mins}m ${secs}s`;
+        resultMetaTimeSpent.classList.remove('hidden');
+      } else {
+        resultMetaTimeSpent.classList.add('hidden');
+      }
+    }
+
+    // 4. Metrics Grid
+    if (statCorrectCount) statCorrectCount.textContent = result.correct_count;
+    if (statIncorrectCount) statIncorrectCount.textContent = result.incorrect_count;
+    if (statUnansweredCount) statUnansweredCount.textContent = result.unanswered_count;
+    if (statTotalCount) statTotalCount.textContent = result.total_questions;
+
+    // 5. Update Filter Tab Counts
+    if (filterCountAll) filterCountAll.textContent = result.total_questions;
+    if (filterCountCorrect) filterCountCorrect.textContent = result.correct_count;
+    if (filterCountIncorrect) filterCountIncorrect.textContent = result.incorrect_count;
+    if (filterCountUnanswered) filterCountUnanswered.textContent = result.unanswered_count;
+
+    // 6. Render Detailed Question Review Items
+    renderReviewQuestions();
+  }
+
+  function renderReviewQuestions() {
+    if (!reviewQuestionsContainer || !state.submissionResult) return;
+
+    const allReviews = state.submissionResult.questions_review || [];
+    const filter = state.activeReviewFilter;
+
+    // Filter questions
+    const filtered = allReviews.filter(q => {
+      if (filter === 'correct') return q.is_correct;
+      if (filter === 'incorrect') return q.is_answered && !q.is_correct;
+      if (filter === 'unanswered') return !q.is_answered;
+      return true; // 'all'
+    });
+
+    reviewQuestionsContainer.innerHTML = '';
+
+    if (filtered.length === 0) {
+      reviewQuestionsContainer.innerHTML = `
+        <div class="empty-state text-center" style="padding: 24px; color: var(--color-text-muted);">
+          No questions match the "${filter}" filter.
+        </div>
+      `;
+      return;
+    }
+
+    filtered.forEach(q => {
+      const card = document.createElement('div');
+      let statusClass = 'status-unanswered';
+      let statusLabel = 'Unanswered';
+      let statusIcon = '―';
+
+      if (q.is_correct) {
+        statusClass = 'status-correct';
+        statusLabel = 'Correct';
+        statusIcon = '✓';
+      } else if (q.is_answered) {
+        statusClass = 'status-incorrect';
+        statusLabel = 'Incorrect';
+        statusIcon = '✕';
+      }
+
+      card.className = `review-card ${statusClass}`;
+
+      // Build options HTML
+      const optKeys = ['A', 'B', 'C', 'D'];
+      let optionsHtml = '';
+
+      optKeys.forEach(k => {
+        const optText = (q.options && q.options[k]) || '';
+        const isCorrectTarget = (k === q.correct_answer);
+        const isUserChoice = (k === q.user_answer);
+
+        let optClass = 'review-option';
+        let optTag = '';
+
+        if (isCorrectTarget) {
+          optClass += ' is-correct-target';
+          optTag = '<span class="review-opt-tag">Correct Answer</span>';
+        } else if (isUserChoice && !q.is_correct) {
+          optClass += ' is-user-incorrect';
+          optTag = '<span class="review-opt-tag">Your Choice</span>';
+        }
+
+        optionsHtml += `
+          <div class="${optClass}">
+            <span class="review-opt-key">${k}</span>
+            <span class="review-opt-text">${escapeHtml(optText)}</span>
+            ${optTag}
+          </div>
+        `;
+      });
+
+      card.innerHTML = `
+        <div class="review-card-header">
+          <div class="review-q-num-wrapper">
+            <span class="review-q-badge">Question ${q.id}</span>
+            <span class="review-status-pill">${statusIcon} ${statusLabel}</span>
+          </div>
+          <div class="review-user-choice-pill" style="font-size: var(--font-size-xs); color: var(--color-text-muted);">
+            Your Answer: <strong>${q.user_answer ? 'Option ' + q.user_answer : 'None (Unanswered)'}</strong>
+          </div>
+        </div>
+
+        <h4 class="review-prompt">${escapeHtml(q.question)}</h4>
+
+        <div class="review-options-list">
+          ${optionsHtml}
+        </div>
+
+        <div class="review-explanation-box">
+          <div class="review-exp-header">
+            <svg class="btn-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"></circle>
+              <line x1="12" y1="16" x2="12" y2="12"></line>
+              <line x1="12" y1="8" x2="12.01" y2="8"></line>
+            </svg>
+            Explanation
+          </div>
+          <p class="review-exp-text">${escapeHtml(q.explanation)}</p>
+        </div>
+      `;
+
+      reviewQuestionsContainer.appendChild(card);
+    });
+  }
+
+  // Filter Tabs Event Listeners
+  const filterTabs = document.querySelectorAll('.filter-tab');
+  filterTabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+      filterTabs.forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      state.activeReviewFilter = tab.dataset.filter || 'all';
+      renderReviewQuestions();
+    });
+  });
+
+  // Scroll to Review Button
+  if (scrollToReviewBtn) {
+    scrollToReviewBtn.addEventListener('click', () => {
+      if (answerReviewSection) {
+        answerReviewSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    });
+  }
+
+  // Retake Same Test Button (Clears answers and restarts test timer)
+  if (restartSameTestBtn) {
+    restartSameTestBtn.addEventListener('click', () => {
+      const confirmed = window.confirm("Retake this revision test? Your previous answers will be cleared so you can practice again.");
+      if (!confirmed) return;
+
+      state.userAnswers = {};
+      state.isSubmitted = false;
+      state.submissionResult = null;
+      state.currentQuestionIndex = 0;
+      state.testStartTime = Date.now();
+      transitionToStep(3);
+    });
+  }
+
+  // Return to Settings Button from Results
+  if (newTestSettingsBtn) {
+    newTestSettingsBtn.addEventListener('click', () => {
       transitionToStep(2);
+    });
+  }
+
+  // Start Over / Upload New PDF Button
+  if (startOverUploadBtn) {
+    startOverUploadBtn.addEventListener('click', () => {
+      const confirmed = window.confirm("Upload a new PDF? Current test questions and results will be cleared.");
+      if (confirmed) {
+        resetToUpload();
+      }
     });
   }
 
@@ -864,3 +1241,4 @@ document.addEventListener('DOMContentLoaded', () => {
   // Periodically check connection
   setInterval(performHealthCheck, CONFIG.HEALTH_CHECK_INTERVAL_MS);
 });
+

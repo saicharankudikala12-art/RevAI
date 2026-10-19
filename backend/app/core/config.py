@@ -23,6 +23,9 @@ class Settings(BaseSettings):
     AI_MODEL: str = "gemini-2.5-flash"
     ALLOW_HEURISTIC_FALLBACK: bool = False
 
+    # Security Configuration (For Milestone 5 Test Tokens)
+    SECRET_KEY: str = "revai-secure-test-session-key-dev-default"
+
     @property
     def effective_ai_api_key(self) -> str:
         """Return the configured Gemini API key from AI_API_KEY or GEMINI_API_KEY."""

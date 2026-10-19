@@ -8,13 +8,21 @@ try:
         PDFUploadResponse,
         RevisionGenerateRequest,
         RevisionGenerateResponse,
-        QuestionItem
+        QuestionItem,
+        TestSubmissionRequest,
+        TestSubmissionResponse
     )
     from backend.app.services.pdf_service import extract_pdf_data, PDFProcessingError
     from backend.app.services.ai_service import (
         generate_revision_questions,
         AIServiceError,
         AIServiceConfigurationError
+    )
+    from backend.app.services.scoring_service import (
+        create_test_token,
+        verify_test_token,
+        evaluate_test_submission,
+        ScoringError
     )
 except ImportError:  # pragma: no cover
     from app.core.config import settings
@@ -23,7 +31,9 @@ except ImportError:  # pragma: no cover
         PDFUploadResponse,
         RevisionGenerateRequest,
         RevisionGenerateResponse,
-        QuestionItem
+        QuestionItem,
+        TestSubmissionRequest,
+        TestSubmissionResponse
     )
     from app.services.pdf_service import extract_pdf_data, PDFProcessingError
     from app.services.ai_service import (
@@ -31,6 +41,13 @@ except ImportError:  # pragma: no cover
         AIServiceError,
         AIServiceConfigurationError
     )
+    from app.services.scoring_service import (
+        create_test_token,
+        verify_test_token,
+        evaluate_test_submission,
+        ScoringError
+    )
+
 
 api_router = APIRouter()
 
@@ -147,13 +164,16 @@ async def generate_revision_test(request: RevisionGenerateRequest) -> RevisionGe
             model = settings.AI_MODEL
 
         questions = [QuestionItem(**q) for q in raw_questions]
+        test_token = create_test_token(questions)
+
         return RevisionGenerateResponse(
             success=True,
             provider=provider,
             model=model,
             time_remaining=request.time_remaining,
             question_count=len(questions),
-            questions=questions
+            questions=questions,
+            test_token=test_token
         )
     except AIServiceConfigurationError as cfg_err:
         raise HTTPException(
@@ -170,4 +190,48 @@ async def generate_revision_test(request: RevisionGenerateRequest) -> RevisionGe
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="We couldn't generate your revision test right now. Please try again."
         ) from exc
+
+
+@api_router.post(
+    "/revision/submit",
+    response_model=TestSubmissionResponse,
+    tags=["Test Evaluation"],
+    summary="Submit and Score Revision Test",
+    description="Submits user answers for objective grading against signed session token or authoritative questions."
+)
+async def submit_revision_test(submission: TestSubmissionRequest) -> TestSubmissionResponse:
+    """Grade submitted test answers deterministically and return score analysis and explanations."""
+    authoritative_questions = []
+
+    # Priority 1: Verify and decode from signed test token
+    if submission.test_token:
+        try:
+            authoritative_questions = verify_test_token(submission.test_token)
+        except ScoringError as s_err:
+            raise HTTPException(
+                status_code=s_err.status_code,
+                detail=s_err.message
+            ) from s_err
+    # Priority 2: Use explicitly provided questions list (with correct answers & explanations)
+    elif submission.questions:
+        authoritative_questions = [q.model_dump() for q in submission.questions]
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Submission must include a valid test_token or questions list."
+        )
+
+    try:
+        response = evaluate_test_submission(
+            authoritative_questions=authoritative_questions,
+            user_answers=submission.user_answers,
+            time_spent_seconds=submission.time_spent_seconds
+        )
+        return response
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An error occurred while scoring your test."
+        ) from exc
+
 
