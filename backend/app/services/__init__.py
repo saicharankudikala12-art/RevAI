@@ -14,6 +14,10 @@ try:
         extract_topic_from_question,
         analyze_weak_topics,
     )
+    from backend.app.services.flashcard_service import (
+        generate_revision_flashcards,
+        generate_heuristic_fallback_flashcards,
+    )
 except ImportError:  # pragma: no cover
     from app.services.pdf_service import (
         extract_pdf_data,
@@ -30,6 +34,10 @@ except ImportError:  # pragma: no cover
         extract_topic_from_question,
         analyze_weak_topics,
     )
+    from app.services.flashcard_service import (
+        generate_revision_flashcards,
+        generate_heuristic_fallback_flashcards,
+    )
 
 __all__ = [
     "extract_pdf_data",
@@ -41,5 +49,7 @@ __all__ = [
     "ScoringError",
     "extract_topic_from_question",
     "analyze_weak_topics",
+    "generate_revision_flashcards",
+    "generate_heuristic_fallback_flashcards",
 ]
 

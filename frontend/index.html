@@ -519,7 +519,16 @@
 
         <!-- Action Buttons: Review & Retake -->
         <div class="results-primary-actions">
-          <button id="scrollToReviewBtn" class="btn btn-primary" type="button">
+          <button id="startFlashcardsBtn" class="btn btn-primary" type="button" title="Generate and practice interactive revision flashcards focused on your weak areas">
+            <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="2" y="4" width="20" height="16" rx="2"></rect>
+              <path d="M10 4v4"></path>
+              <path d="M2 8h20"></path>
+              <path d="m9 15 2 2 4-4"></path>
+            </svg>
+            Practice Weak-Topic Flashcards
+          </button>
+          <button id="scrollToReviewBtn" class="btn btn-secondary" type="button">
             <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"></path>
               <circle cx="12" cy="12" r="3"></circle>
@@ -579,6 +588,128 @@
 
           <div id="reviewQuestionsContainer" class="review-questions-list">
             <!-- Dynamically populated via JS -->
+          </div>
+        </div>
+      </section>
+
+      <!-- ============================================== -->
+      <!-- STAGE 5: SMART REVISION FLASHCARDS (MILESTONE 8)-->
+      <!-- ============================================== -->
+      <section id="stepFlashcardsSection" class="content-card hidden" aria-labelledby="flashcardsHeading">
+        <div class="card-header-badge">Step 5 · Smart Revision Flashcards</div>
+
+        <div class="card-intro">
+          <div class="flashcards-header-row">
+            <div>
+              <h2 id="flashcardsHeading" class="card-title">Targeted Revision Flashcards</h2>
+              <p class="card-description">
+                Fast-recall flashcards grounded in your study material, focusing on your weak topics and missed questions.
+              </p>
+            </div>
+            <div class="flashcards-top-actions">
+              <button id="backToResultsBtn" class="btn btn-secondary btn-sm" type="button">
+                ← Back to Results
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Flashcards Loading State -->
+        <div id="flashcardsLoadingState" class="flashcards-loading-state hidden">
+          <div class="loading-spinner"></div>
+          <p class="loading-text">Generating targeted revision flashcards...</p>
+          <span class="loading-subtext">Grounding concepts in your study material and weak-topic analysis</span>
+        </div>
+
+        <!-- Flashcards Empty / Error State -->
+        <div id="flashcardsEmptyState" class="flashcards-empty-state hidden">
+          <div class="empty-icon" aria-hidden="true">🃏</div>
+          <h3 class="empty-title" id="flashcardsEmptyTitle">No Flashcards Available</h3>
+          <p class="empty-desc" id="flashcardsEmptyDesc">Upload study material and complete a test to generate targeted flashcards.</p>
+          <button id="retryFlashcardsBtn" class="btn btn-primary" type="button">Generate Flashcards</button>
+        </div>
+
+        <!-- Flashcards Main Deck Display Area -->
+        <div id="flashcardsDeckContainer" class="flashcards-deck-container">
+          <!-- Top Status Bar: Topic Badge + Counter -->
+          <div class="flashcard-status-bar">
+            <span id="flashcardTopicBadge" class="flashcard-topic-pill">Topic: General Revision</span>
+            <div class="flashcard-counter-wrap">
+              <span id="flashcardCounter" class="flashcard-counter">Card 1 of 8</span>
+              <span id="flashcardProgressPct" class="flashcard-progress-pill">12%</span>
+            </div>
+          </div>
+
+          <!-- Progress bar -->
+          <div class="flashcard-progress-track" aria-hidden="true">
+            <div id="flashcardProgressBar" class="flashcard-progress-fill" style="width: 12.5%;"></div>
+          </div>
+
+          <!-- 3D Interactive Flip Card -->
+          <div class="flashcard-scene" id="flashcardScene" tabindex="0" role="region" aria-label="Flashcard. Press Space or Click to flip">
+            <div class="flashcard-card" id="flashcardCard">
+              <!-- FRONT FACE -->
+              <div class="flashcard-face flashcard-front">
+                <div class="face-top-tag">
+                  <span class="face-tag-icon">❓</span> Question / Concept
+                </div>
+                <div class="face-content">
+                  <p id="flashcardFrontText" class="flashcard-text">Loading question...</p>
+                </div>
+                <div class="face-footer">
+                  <span class="face-prompt-hint">Click card or press Space to flip ↺</span>
+                </div>
+              </div>
+
+              <!-- BACK FACE -->
+              <div class="flashcard-face flashcard-back">
+                <div class="face-top-tag back-tag">
+                  <span class="face-tag-icon">💡</span> Concise Answer
+                </div>
+                <div class="face-content">
+                  <p id="flashcardBackText" class="flashcard-text">Loading answer...</p>
+                  <div id="flashcardMemoryTipWrap" class="flashcard-memory-tip">
+                    <span class="tip-label">Memory Tip:</span>
+                    <span id="flashcardMemoryTipText" class="tip-text"></span>
+                  </div>
+                </div>
+                <div class="face-footer">
+                  <span class="face-prompt-hint">Click card or press Space to flip back ↻</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Navigation and Control Actions -->
+          <div class="flashcard-controls">
+            <button id="prevCardBtn" class="btn btn-secondary" type="button" title="Previous flashcard (Left Arrow)">
+              ← Previous
+            </button>
+            <button id="flipCardBtn" class="btn btn-primary" type="button" title="Flip card to reveal or hide answer (Spacebar)">
+              <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
+              </svg>
+              <span id="flipBtnText">Reveal Answer</span>
+            </button>
+            <button id="nextCardBtn" class="btn btn-secondary" type="button" title="Next flashcard (Right Arrow)">
+              Next →
+            </button>
+          </div>
+
+          <!-- Deck Bottom Helper / Secondary Actions -->
+          <div class="flashcard-deck-footer">
+            <div class="flashcard-keyboard-help">
+              <span class="keyboard-key">Space</span> to flip · 
+              <span class="keyboard-key">←</span> / <span class="keyboard-key">→</span> to navigate
+            </div>
+            <div class="flashcard-deck-actions">
+              <button id="restartFlashcardsBtn" class="btn btn-link btn-sm" type="button">
+                Restart Deck ↻
+              </button>
+              <button id="shuffleFlashcardsBtn" class="btn btn-link btn-sm" type="button">
+                Shuffle 🔀
+              </button>
+            </div>
           </div>
         </div>
       </section>

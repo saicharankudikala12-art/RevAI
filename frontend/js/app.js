@@ -25,7 +25,12 @@ document.addEventListener('DOMContentLoaded', () => {
     isSubmitting: false,
     isSubmitted: false,
     submissionResult: null, // TestSubmissionResponse object
-    activeReviewFilter: 'all' // 'all', 'incorrect', 'unanswered', 'correct'
+    activeReviewFilter: 'all', // 'all', 'incorrect', 'unanswered', 'correct'
+    // Milestone 8: Smart Revision Flashcards state
+    flashcards: [],
+    currentFlashcardIndex: 0,
+    isCardFlipped: false,
+    isLoadingFlashcards: false
   };
 
   // -------------------------------------------------------------
@@ -148,6 +153,33 @@ document.addEventListener('DOMContentLoaded', () => {
   const weakTopicsContainer = document.getElementById('weakTopicsContainer');
   const weakTopicsCountBadge = document.getElementById('weakTopicsCountBadge');
 
+  // Milestone 8: Smart Revision Flashcard Elements
+  const startFlashcardsBtn = document.getElementById('startFlashcardsBtn');
+  const stepFlashcardsSection = document.getElementById('stepFlashcardsSection');
+  const backToResultsBtn = document.getElementById('backToResultsBtn');
+  const flashcardsLoadingState = document.getElementById('flashcardsLoadingState');
+  const flashcardsEmptyState = document.getElementById('flashcardsEmptyState');
+  const flashcardsEmptyTitle = document.getElementById('flashcardsEmptyTitle');
+  const flashcardsEmptyDesc = document.getElementById('flashcardsEmptyDesc');
+  const retryFlashcardsBtn = document.getElementById('retryFlashcardsBtn');
+  const flashcardsDeckContainer = document.getElementById('flashcardsDeckContainer');
+  const flashcardTopicBadge = document.getElementById('flashcardTopicBadge');
+  const flashcardCounter = document.getElementById('flashcardCounter');
+  const flashcardProgressPct = document.getElementById('flashcardProgressPct');
+  const flashcardProgressBar = document.getElementById('flashcardProgressBar');
+  const flashcardScene = document.getElementById('flashcardScene');
+  const flashcardCard = document.getElementById('flashcardCard');
+  const flashcardFrontText = document.getElementById('flashcardFrontText');
+  const flashcardBackText = document.getElementById('flashcardBackText');
+  const flashcardMemoryTipWrap = document.getElementById('flashcardMemoryTipWrap');
+  const flashcardMemoryTipText = document.getElementById('flashcardMemoryTipText');
+  const prevCardBtn = document.getElementById('prevCardBtn');
+  const flipCardBtn = document.getElementById('flipCardBtn');
+  const flipBtnText = document.getElementById('flipBtnText');
+  const nextCardBtn = document.getElementById('nextCardBtn');
+  const restartFlashcardsBtn = document.getElementById('restartFlashcardsBtn');
+  const shuffleFlashcardsBtn = document.getElementById('shuffleFlashcardsBtn');
+
   // Set footer API target URL
   if (footerApiUrl) {
     footerApiUrl.textContent = CONFIG.API_BASE_URL.replace(/\/api$/, '');
@@ -211,6 +243,8 @@ document.addEventListener('DOMContentLoaded', () => {
         transitionToStep(3);
       } else if (targetStep === 4 && state.isSubmitted && state.submissionResult) {
         transitionToStep(4);
+      } else if (targetStep === 5 && state.flashcards && state.flashcards.length > 0) {
+        transitionToStep(5);
       }
     });
   });
@@ -226,6 +260,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (generatingLoadingSection) generatingLoadingSection.classList.add('hidden');
       if (stepTestSection) stepTestSection.classList.add('hidden');
       if (stepResultsSection) stepResultsSection.classList.add('hidden');
+      if (stepFlashcardsSection) stepFlashcardsSection.classList.add('hidden');
       updateStepper(1);
       stepUploadSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
     } else if (targetStep === 2) {
@@ -239,6 +274,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (generatingLoadingSection) generatingLoadingSection.classList.add('hidden');
       if (stepTestSection) stepTestSection.classList.add('hidden');
       if (stepResultsSection) stepResultsSection.classList.add('hidden');
+      if (stepFlashcardsSection) stepFlashcardsSection.classList.add('hidden');
       updateStepper(2);
       stepSettingsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
     } else if (targetStep === 3) {
@@ -251,6 +287,7 @@ document.addEventListener('DOMContentLoaded', () => {
       stepSettingsSection.classList.add('hidden');
       if (generatingLoadingSection) generatingLoadingSection.classList.add('hidden');
       if (stepResultsSection) stepResultsSection.classList.add('hidden');
+      if (stepFlashcardsSection) stepFlashcardsSection.classList.add('hidden');
       if (stepTestSection) stepTestSection.classList.remove('hidden');
       updateStepper(3);
       stepTestSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -265,10 +302,21 @@ document.addEventListener('DOMContentLoaded', () => {
       stepSettingsSection.classList.add('hidden');
       if (generatingLoadingSection) generatingLoadingSection.classList.add('hidden');
       if (stepTestSection) stepTestSection.classList.add('hidden');
+      if (stepFlashcardsSection) stepFlashcardsSection.classList.add('hidden');
       if (stepResultsSection) stepResultsSection.classList.remove('hidden');
       updateStepper(4);
       stepResultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
       renderResultsDashboard();
+    } else if (targetStep === 5) {
+      stepUploadSection.classList.add('hidden');
+      stepSettingsSection.classList.add('hidden');
+      if (generatingLoadingSection) generatingLoadingSection.classList.add('hidden');
+      if (stepTestSection) stepTestSection.classList.add('hidden');
+      if (stepResultsSection) stepResultsSection.classList.add('hidden');
+      if (stepFlashcardsSection) stepFlashcardsSection.classList.remove('hidden');
+      updateStepper(5);
+      stepFlashcardsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      renderCurrentFlashcard();
     }
   }
 
@@ -465,6 +513,10 @@ document.addEventListener('DOMContentLoaded', () => {
     state.isSubmitting = false;
     state.isSubmitted = false;
     state.submissionResult = null;
+    state.flashcards = [];
+    state.currentFlashcardIndex = 0;
+    state.isCardFlipped = false;
+    state.isLoadingFlashcards = false;
 
     hideError();
     closeSubmitModal();
@@ -477,6 +529,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (generatingLoadingSection) generatingLoadingSection.classList.add('hidden');
     if (stepTestSection) stepTestSection.classList.add('hidden');
     if (stepResultsSection) stepResultsSection.classList.add('hidden');
+    if (stepFlashcardsSection) stepFlashcardsSection.classList.add('hidden');
     stepUploadSection.classList.remove('hidden');
 
     updateStepper(1);
@@ -1331,6 +1384,286 @@ document.addEventListener('DOMContentLoaded', () => {
       if (confirmed) {
         resetToUpload();
       }
+    });
+  }
+
+  // =============================================================
+  // Milestone 8: Smart Revision Flashcards Logic
+  // =============================================================
+
+  /**
+   * Fetch flashcards from backend API based on current test results and source PDF.
+   */
+  async function generateAndLoadFlashcards() {
+    if (state.isLoadingFlashcards) return;
+
+    if (!state.pdfResult || !state.pdfResult.extracted_text) {
+      showError("Study material is required to generate revision flashcards.");
+      return;
+    }
+
+    state.isLoadingFlashcards = true;
+    hideError();
+
+    // Transition to step 5 view
+    transitionToStep(5);
+
+    // Show loading state, hide empty and deck
+    if (flashcardsLoadingState) flashcardsLoadingState.classList.remove('hidden');
+    if (flashcardsEmptyState) flashcardsEmptyState.classList.add('hidden');
+    if (flashcardsDeckContainer) flashcardsDeckContainer.classList.add('hidden');
+
+    // Extract weak topics from test submission result
+    const weakTopics = (state.submissionResult && state.submissionResult.weak_topics)
+      ? state.submissionResult.weak_topics
+      : [];
+
+    // Extract missed or unanswered questions from test submission result
+    const incorrectQuestions = [];
+    if (state.submissionResult && Array.isArray(state.submissionResult.questions_review)) {
+      state.submissionResult.questions_review.forEach(item => {
+        if (!item.is_correct) {
+          incorrectQuestions.push(item);
+        }
+      });
+    }
+
+    try {
+      const res = await API.generateRevisionFlashcards(
+        state.pdfResult.extracted_text,
+        weakTopics,
+        incorrectQuestions,
+        8
+      );
+
+      const cards = res.data ? (res.data.cards || res.data.flashcards || []) : [];
+      if (res.success && Array.isArray(cards) && cards.length > 0) {
+        state.flashcards = cards;
+        state.currentFlashcardIndex = 0;
+        state.isCardFlipped = false;
+
+        if (flashcardsLoadingState) flashcardsLoadingState.classList.add('hidden');
+        if (flashcardsEmptyState) flashcardsEmptyState.classList.add('hidden');
+        if (flashcardsDeckContainer) flashcardsDeckContainer.classList.remove('hidden');
+
+        renderCurrentFlashcard();
+      } else {
+        const errorMsg = res.error || "Unable to generate flashcards from the study material.";
+        showFlashcardsEmptyState("No Flashcards Generated", errorMsg);
+      }
+    } catch (err) {
+      showFlashcardsEmptyState("Generation Error", "An unexpected error occurred while generating flashcards.");
+    } finally {
+      state.isLoadingFlashcards = false;
+      if (flashcardsLoadingState) flashcardsLoadingState.classList.add('hidden');
+    }
+  }
+
+  function showFlashcardsEmptyState(title, desc) {
+    if (flashcardsDeckContainer) flashcardsDeckContainer.classList.add('hidden');
+    if (flashcardsLoadingState) flashcardsLoadingState.classList.add('hidden');
+    if (flashcardsEmptyState) {
+      if (flashcardsEmptyTitle) flashcardsEmptyTitle.textContent = title;
+      if (flashcardsEmptyDesc) flashcardsEmptyDesc.textContent = desc;
+      flashcardsEmptyState.classList.remove('hidden');
+    }
+  }
+
+  /**
+   * Render currently active flashcard into the 3D card element.
+   */
+  function renderCurrentFlashcard() {
+    if (!state.flashcards || state.flashcards.length === 0) {
+      showFlashcardsEmptyState("No Flashcards Available", "Complete a revision test to generate targeted flashcards.");
+      return;
+    }
+
+    // Ensure valid index
+    if (state.currentFlashcardIndex < 0) state.currentFlashcardIndex = 0;
+    if (state.currentFlashcardIndex >= state.flashcards.length) {
+      state.currentFlashcardIndex = state.flashcards.length - 1;
+    }
+
+    const card = state.flashcards[state.currentFlashcardIndex];
+    const total = state.flashcards.length;
+    const currentNum = state.currentFlashcardIndex + 1;
+
+    // Reset flipped state on card switch
+    state.isCardFlipped = false;
+    if (flashcardCard) flashcardCard.classList.remove('is-flipped');
+    if (flipBtnText) flipBtnText.textContent = "Reveal Answer";
+
+    // Topic badge
+    if (flashcardTopicBadge) {
+      flashcardTopicBadge.textContent = card.topic ? `Topic: ${card.topic}` : "Topic: General Revision";
+      flashcardTopicBadge.title = card.topic || "General Revision";
+    }
+
+    // Counter & progress
+    if (flashcardCounter) {
+      flashcardCounter.textContent = `Card ${currentNum} of ${total}`;
+    }
+
+    const progressPctVal = Math.round((currentNum / total) * 100);
+    if (flashcardProgressPct) {
+      flashcardProgressPct.textContent = `${progressPctVal}%`;
+    }
+    if (flashcardProgressBar) {
+      flashcardProgressBar.style.width = `${progressPctVal}%`;
+    }
+
+    // Front content
+    if (flashcardFrontText) {
+      flashcardFrontText.textContent = card.front || "Concept / Question";
+    }
+
+    // Back content
+    if (flashcardBackText) {
+      flashcardBackText.textContent = card.back || "Answer";
+    }
+
+    // Memory tip
+    if (flashcardMemoryTipWrap && flashcardMemoryTipText) {
+      if (card.memory_tip && card.memory_tip.trim()) {
+        flashcardMemoryTipText.textContent = card.memory_tip.trim();
+        flashcardMemoryTipWrap.classList.remove('hidden');
+      } else {
+        flashcardMemoryTipWrap.classList.add('hidden');
+      }
+    }
+
+    // Nav buttons disabled states
+    if (prevCardBtn) {
+      prevCardBtn.disabled = (state.currentFlashcardIndex === 0);
+      prevCardBtn.style.opacity = (state.currentFlashcardIndex === 0) ? "0.5" : "1";
+    }
+    if (nextCardBtn) {
+      nextCardBtn.disabled = (state.currentFlashcardIndex === total - 1);
+      nextCardBtn.style.opacity = (state.currentFlashcardIndex === total - 1) ? "0.5" : "1";
+    }
+  }
+
+  /**
+   * Flip current card.
+   */
+  function toggleCardFlip() {
+    state.isCardFlipped = !state.isCardFlipped;
+    if (flashcardCard) {
+      flashcardCard.classList.toggle('is-flipped', state.isCardFlipped);
+    }
+    if (flipBtnText) {
+      flipBtnText.textContent = state.isCardFlipped ? "Show Question" : "Reveal Answer";
+    }
+  }
+
+  // Click card scene to flip
+  if (flashcardScene) {
+    flashcardScene.addEventListener('click', (e) => {
+      // Ignore clicks on buttons if any inside
+      if (e.target.closest('button')) return;
+      toggleCardFlip();
+    });
+  }
+
+  // Flip button
+  if (flipCardBtn) {
+    flipCardBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleCardFlip();
+    });
+  }
+
+  // Prev / Next button actions
+  if (prevCardBtn) {
+    prevCardBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (state.currentFlashcardIndex > 0) {
+        state.currentFlashcardIndex--;
+        renderCurrentFlashcard();
+      }
+    });
+  }
+
+  if (nextCardBtn) {
+    nextCardBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (state.currentFlashcardIndex < state.flashcards.length - 1) {
+        state.currentFlashcardIndex++;
+        renderCurrentFlashcard();
+      }
+    });
+  }
+
+  // Restart deck
+  if (restartFlashcardsBtn) {
+    restartFlashcardsBtn.addEventListener('click', () => {
+      state.currentFlashcardIndex = 0;
+      state.isCardFlipped = false;
+      renderCurrentFlashcard();
+    });
+  }
+
+  // Shuffle deck
+  if (shuffleFlashcardsBtn) {
+    shuffleFlashcardsBtn.addEventListener('click', () => {
+      if (!state.flashcards || state.flashcards.length <= 1) return;
+      // Fisher-Yates shuffle
+      for (let i = state.flashcards.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [state.flashcards[i], state.flashcards[j]] = [state.flashcards[j], state.flashcards[i]];
+      }
+      state.currentFlashcardIndex = 0;
+      state.isCardFlipped = false;
+      renderCurrentFlashcard();
+    });
+  }
+
+  // Keyboard navigation for Flashcards (Space to flip, arrows for prev/next)
+  document.addEventListener('keydown', (e) => {
+    if (state.currentStep !== 5) return;
+    // Don't intercept if user is typing in an input
+    if (['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
+
+    if (e.code === 'Space') {
+      e.preventDefault();
+      toggleCardFlip();
+    } else if (e.code === 'ArrowLeft') {
+      e.preventDefault();
+      if (state.currentFlashcardIndex > 0) {
+        state.currentFlashcardIndex--;
+        renderCurrentFlashcard();
+      }
+    } else if (e.code === 'ArrowRight') {
+      e.preventDefault();
+      if (state.currentFlashcardIndex < state.flashcards.length - 1) {
+        state.currentFlashcardIndex++;
+        renderCurrentFlashcard();
+      }
+    }
+  });
+
+  // CTA button in Results dashboard to open flashcards
+  if (startFlashcardsBtn) {
+    startFlashcardsBtn.addEventListener('click', () => {
+      if (state.flashcards && state.flashcards.length > 0) {
+        transitionToStep(5);
+      } else {
+        generateAndLoadFlashcards();
+      }
+    });
+  }
+
+  // Back to Results button in Flashcards header
+  if (backToResultsBtn) {
+    backToResultsBtn.addEventListener('click', () => {
+      transitionToStep(4);
+    });
+  }
+
+  // Retry generating flashcards from empty state
+  if (retryFlashcardsBtn) {
+    retryFlashcardsBtn.addEventListener('click', () => {
+      generateAndLoadFlashcards();
     });
   }
 

@@ -10,7 +10,9 @@ try:
         RevisionGenerateResponse,
         QuestionItem,
         TestSubmissionRequest,
-        TestSubmissionResponse
+        TestSubmissionResponse,
+        FlashcardGenerateRequest,
+        FlashcardGenerateResponse,
     )
     from backend.app.services.pdf_service import extract_pdf_data, PDFProcessingError
     from backend.app.services.ai_service import (
@@ -24,6 +26,7 @@ try:
         evaluate_test_submission,
         ScoringError
     )
+    from backend.app.services.flashcard_service import generate_revision_flashcards
 except ImportError:  # pragma: no cover
     from app.core.config import settings
     from app.models.schemas import (
@@ -33,7 +36,9 @@ except ImportError:  # pragma: no cover
         RevisionGenerateResponse,
         QuestionItem,
         TestSubmissionRequest,
-        TestSubmissionResponse
+        TestSubmissionResponse,
+        FlashcardGenerateRequest,
+        FlashcardGenerateResponse,
     )
     from app.services.pdf_service import extract_pdf_data, PDFProcessingError
     from app.services.ai_service import (
@@ -47,6 +52,7 @@ except ImportError:  # pragma: no cover
         evaluate_test_submission,
         ScoringError
     )
+    from app.services.flashcard_service import generate_revision_flashcards
 
 
 api_router = APIRouter()
@@ -232,6 +238,62 @@ async def submit_revision_test(submission: TestSubmissionRequest) -> TestSubmiss
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An error occurred while scoring your test."
+        ) from exc
+
+
+@api_router.post(
+    "/revision/flashcards",
+    response_model=FlashcardGenerateResponse,
+    tags=["Smart Flashcards"],
+    summary="Generate Targeted Revision Flashcards",
+    description="Generates smart revision flashcards focused on weak topics and missed questions from the revision test, grounded in source PDF content."
+)
+async def create_flashcards(request: FlashcardGenerateRequest) -> FlashcardGenerateResponse:
+    """Generate revision flashcards prioritizing weak topics and missed questions."""
+    source_content = request.extracted_text.strip()
+    if not source_content:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Source content cannot be empty. Please provide study material."
+        )
+
+    if len(source_content) < 30:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Source content is too short to generate meaningful revision flashcards (minimum 30 characters)."
+        )
+
+    try:
+        result = await generate_revision_flashcards(
+            extracted_text=source_content,
+            weak_topics=request.weak_topics,
+            incorrect_questions=request.incorrect_questions,
+            max_cards=request.max_cards or 10,
+        )
+        cards = result.get("cards", [])
+        return FlashcardGenerateResponse(
+            success=True,
+            provider=result.get("provider", "gemini"),
+            model=result.get("model"),
+            total_cards=len(cards),
+            cards=cards,
+        )
+    except AIServiceConfigurationError as cfg_err:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(cfg_err)
+        ) from cfg_err
+    except AIServiceError as ai_err:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=str(ai_err)
+        ) from ai_err
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to generate revision flashcards: {str(exc)}"
         ) from exc
 
 

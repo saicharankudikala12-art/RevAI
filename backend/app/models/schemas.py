@@ -122,4 +122,34 @@ class TestSubmissionResponse(BaseModel):
     weak_topics: list[WeakTopicItem] = Field(default_factory=list, description="Prioritized list of weak concepts and targeted revision recommendations")
 
 
+# =============================================================================
+# Milestone 8: Smart Revision Flashcard Schemas
+# =============================================================================
+class FlashcardItem(BaseModel):
+    """Schema for a single revision flashcard."""
+    id: int = Field(description="1-based flashcard identifier")
+    front: str = Field(description="Core revision question, prompt, or term on the front of the card")
+    back: str = Field(description="Concise, accurate answer, definition, or concept on the back of the card")
+    topic: Optional[str] = Field(default=None, description="Associated subject topic or concept name")
+    memory_tip: Optional[str] = Field(default=None, description="Short memory mnemonic, explanation, or key distinction")
+
+
+class FlashcardGenerateRequest(BaseModel):
+    """Request payload for generating revision flashcards."""
+    extracted_text: str = Field(..., description="Extracted study material text from PDF")
+    weak_topics: list[WeakTopicItem] = Field(default_factory=list, description="Identified weak topics from test submission")
+    incorrect_questions: list[QuestionReviewItem] = Field(default_factory=list, description="Questions answered incorrectly or unanswered")
+    max_cards: int = Field(default=10, ge=1, le=30, description="Target number of flashcards to produce (1-30)")
+
+
+class FlashcardGenerateResponse(BaseModel):
+    """Response payload for successfully generated revision flashcards."""
+    success: bool = Field(default=True, description="Whether flashcard generation succeeded")
+    provider: str = Field(default="gemini", description="Generation provider used: 'gemini' or 'heuristic-fallback'")
+    model: Optional[str] = Field(default=None, description="AI model used if generated via AI")
+    total_cards: int = Field(description="Total number of generated flashcards")
+    cards: list[FlashcardItem] = Field(description="List of structured revision flashcards")
+
+
+
 
