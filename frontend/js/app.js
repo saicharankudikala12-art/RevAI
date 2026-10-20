@@ -180,9 +180,18 @@ document.addEventListener('DOMContentLoaded', () => {
   const restartFlashcardsBtn = document.getElementById('restartFlashcardsBtn');
   const shuffleFlashcardsBtn = document.getElementById('shuffleFlashcardsBtn');
 
-  // Set footer API target URL
+  const footerDocsLink = document.getElementById('footerDocsLink');
+
+  // Set footer API target URL and Docs link dynamically
+  const displayBackendOrigin = CONFIG.API_BASE_URL.startsWith('http')
+    ? CONFIG.API_BASE_URL.replace(/\/api$/, '')
+    : window.location.origin;
+
   if (footerApiUrl) {
-    footerApiUrl.textContent = CONFIG.API_BASE_URL.replace(/\/api$/, '');
+    footerApiUrl.textContent = displayBackendOrigin;
+  }
+  if (footerDocsLink) {
+    footerDocsLink.href = `${displayBackendOrigin}/docs`;
   }
 
   // -------------------------------------------------------------

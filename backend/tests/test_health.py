@@ -18,14 +18,34 @@ def client():
 
 
 def test_root_endpoint(client):
-    """Verify root / returns 200 with online status and links."""
+    """Verify root / returns 200 with HTML when frontend is mounted, or JSON fallback."""
     response = client.get("/")
     assert response.status_code == 200
-    data = response.json()
-    assert data["name"] == settings.APP_NAME
-    assert data["status"] == "online"
-    assert data["documentation"] == "/docs"
-    assert data["health"] == "/api/health"
+    if "text/html" in response.headers.get("content-type", ""):
+        assert "RevAI" in response.text
+        assert "<!DOCTYPE html>" in response.text
+    else:
+        data = response.json()
+        assert data["name"] == settings.APP_NAME
+        assert data["status"] == "online"
+
+
+def test_production_secret_key_enforcement():
+    """Verify that in production mode, default secret key raises ValueError."""
+    from backend.app.core.config import Settings, DEFAULT_DEV_SECRET_KEY
+    prod_settings_default_secret = Settings(
+        APP_ENV="production",
+        SECRET_KEY=DEFAULT_DEV_SECRET_KEY
+    )
+    with pytest.raises(ValueError, match="SECRET_KEY must be explicitly set"):
+        prod_settings_default_secret.validate_production_security()
+
+    # With a custom secure key, validation passes
+    prod_settings_secure = Settings(
+        APP_ENV="production",
+        SECRET_KEY="super-secret-production-random-token-key-12345"
+    )
+    prod_settings_secure.validate_production_security()  # Should not raise
 
 
 def test_health_check_endpoint(client):

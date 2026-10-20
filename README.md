@@ -98,69 +98,70 @@ RevAI/
    cp backend/.env.example backend/.env
    ```
 
-5. **Start the backend development server**:
-   ```bash
-   uvicorn backend.app.main:app --reload --host 0.0.0.0 --port 8000
-   ```
-   The backend will be available at:
-   - API Root: `http://localhost:8000/`
-   - Health Check: `http://localhost:8000/api/health`
-   - Interactive OpenAPI (Swagger) Docs: `http://localhost:8000/docs`
+5. **Start the backend server**:
+   - **Unified Serving (Serves both Web App & API)**:
+     ```bash
+     uvicorn backend.app.main:app --host 0.0.0.0 --port 8000
+     ```
+     The entire app will be live at:
+     - Web Application: `http://localhost:8000/`
+     - Health Check: `http://localhost:8000/api/health`
+     - Interactive OpenAPI (Swagger) Docs: `http://localhost:8000/docs`
+
+   - **Development with hot reload**:
+     ```bash
+     uvicorn backend.app.main:app --reload --host 0.0.0.0 --port 8000
+     ```
 
 ---
 
-### Frontend Setup
+### Production Start Command
 
-The frontend uses standard modern ES6+ JavaScript and Vanilla CSS with zero build steps required.
+For unified production hosting (e.g. Render, Railway, AWS App Runner):
+```bash
+uvicorn backend.app.main:app --host 0.0.0.0 --port ${PORT:-8000} --workers 2
+```
 
-1. **Option A: Serve via any static web server** (Recommended for dev):
-   - Using Python's built-in HTTP server:
-     ```bash
-     python -m http.server 3000 --directory frontend
-     ```
-   - Using Node's `npx serve`:
-     ```bash
-     npx serve frontend -l 3000
-     ```
+---
 
-2. **Option B: Open directly in your browser**:
-   - Double-click or open `frontend/index.html` in any browser.
+### Frontend Setup (Decoupled Dev Option)
 
-The frontend connects directly to `http://localhost:8000/api` and displays live connection status and round-trip ping latency.
+If developing frontend files separately from the backend:
+1. Using Node's `npx serve`:
+   ```bash
+   npx serve frontend -l 5500
+   ```
+2. The frontend automatically detects decoupled dev ports (e.g., 5500, 3000) and routes API requests to `http://127.0.0.1:8000/api`. When served from port 8000 or any production domain, it seamlessly uses relative `/api` on the same origin.
 
 ---
 
 ## Running Automated Tests
 
-Run the backend test suite using `pytest`:
+Run the full backend test suite using `pytest`:
 
 ```powershell
 # From project root
 backend\.venv\Scripts\pytest backend/tests/ -v
 ```
 
-All tests should pass, confirming that the FastAPI application initializes, CORS headers are configured, and the health check responds with the structured `HealthResponse` schema.
-
 ---
 
-## AWS Deployment Readiness
+## Deployment Readiness
 
-RevAI is architected for simple and reliable deployment on AWS:
-- **Backend**: Can be containerized via Docker and deployed to **AWS App Runner** or **AWS ECS (Fargate)** with zero server management, or packaged as an **AWS Lambda** function using Mangum.
-- **Frontend**: Because the frontend is static HTML/CSS/JS, it can be deployed directly to an **Amazon S3** bucket fronted by an **Amazon CloudFront** distribution for global CDN delivery, high availability, and minimal hosting costs.
-- **Environment & Secrets**: Configured via standard environment variables compatible with **AWS Systems Manager Parameter Store** or **AWS Secrets Manager**.
+RevAI is architected for unified, containerized, or cloud deployment:
+- **Unified Web & API Service**: FastAPI serves static frontend files at root (`/`, `/css`, `/js`) and API routes under `/api`, eliminating CORS issues in production.
+- **Stateless & Scalable**: No database required. Test tokens are HMAC-SHA256 signed. PDF processing is in-memory with zero disk persistence.
+- **Environment & Secrets**: Configured via standard environment variables (`APP_ENV`, `SECRET_KEY`, `CORS_ORIGINS`, `ALLOW_HEURISTIC_FALLBACK`, `AI_API_KEY`). In production, a secure custom `SECRET_KEY` is strictly enforced at startup.
 
 ---
 
 ## Development Milestones Roadmap
 
 - [x] **MILESTONE 1**: Project foundation and architecture (FastAPI backend, clean frontend, modular folders, Pydantic schemas, health check, automated tests, Git config).
-- [ ] **MILESTONE 2**: PDF upload and PDF text/page processing (`pypdf` extraction, page counting, validation).
-- [ ] **MILESTONE 3**: Revision settings UI and backend API (Time remaining & target question count).
-- [ ] **MILESTONE 4**: AI-powered revision test generation (Context-aware prompt generation, structured output).
-- [ ] **MILESTONE 5**: Test-taking interface (Interactive questions, option selection, timer).
-- [ ] **MILESTONE 6**: Scoring and results (Evaluation engine, accuracy metrics, explanations).
-- [ ] **MILESTONE 7**: Weak-topic analysis (Concept mapping and targeted remediation detection).
-- [ ] **MILESTONE 8**: AI-generated flashcards/memory cards (Front/Back cards for weak concepts).
-- [ ] **MILESTONE 9**: End-to-end integration and user testing.
-- [ ] **MILESTONE 10**: Testing, error handling, UI polishing, security review, and AWS deployment preparation.
+- [x] **MILESTONE 2**: PDF upload and PDF text/page processing (`pypdf` extraction, page counting, validation).
+- [x] **MILESTONE 3**: Revision settings UI and backend API (Time remaining & target question count).
+- [x] **MILESTONE 4**: AI-powered revision test generation (Context-aware prompt generation, structured output).
+- [x] **MILESTONE 5**: Test-taking interface (Interactive questions, option selection, timer).
+- [x] **MILESTONE 6**: Scoring and results (Evaluation engine, accuracy metrics, explanations, HMAC tokens).
+- [x] **MILESTONE 7**: Weak-topic analysis (Concept mapping and targeted remediation detection).
+- [x] **MILESTONE 8**: AI-generated smart revision flashcards (Interactive 3D flip cards, recall tips, weak-topic focus).

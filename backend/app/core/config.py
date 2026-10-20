@@ -6,6 +6,10 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 # Base directories
 BACKEND_DIR = Path(__file__).resolve().parent.parent.parent
 ROOT_DIR = BACKEND_DIR.parent
+FRONTEND_DIR = ROOT_DIR / "frontend"
+
+DEFAULT_DEV_SECRET_KEY = "revai-secure-test-session-key-dev-default"
+
 
 class Settings(BaseSettings):
     """Central configuration class for RevAI backend."""
@@ -24,7 +28,7 @@ class Settings(BaseSettings):
     ALLOW_HEURISTIC_FALLBACK: bool = False
 
     # Security Configuration (For Milestone 5 Test Tokens)
-    SECRET_KEY: str = "revai-secure-test-session-key-dev-default"
+    SECRET_KEY: str = DEFAULT_DEV_SECRET_KEY
 
     @property
     def effective_ai_api_key(self) -> str:
@@ -41,6 +45,15 @@ class Settings(BaseSettings):
     def cors_origins_list(self) -> List[str]:
         """Return list of allowed CORS origins stripped of whitespace."""
         return [origin.strip() for origin in self.CORS_ORIGINS.split(",") if origin.strip()]
+
+    def validate_production_security(self) -> None:
+        """Validate security settings when running in production."""
+        if self.APP_ENV.lower() == "production":
+            if not self.SECRET_KEY or self.SECRET_KEY == DEFAULT_DEV_SECRET_KEY:
+                raise ValueError(
+                    "Production configuration error: SECRET_KEY must be explicitly set to a "
+                    "secure custom value and cannot use the development default."
+                )
 
 
 settings = Settings()
