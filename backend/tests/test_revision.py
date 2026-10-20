@@ -10,8 +10,10 @@ client = TestClient(app)
 
 
 def test_revision_generate_missing_api_key(monkeypatch):
-    """When AI_API_KEY is empty, endpoint returns 503 with configuration message."""
+    """When AI_API_KEY is empty and fallback is disabled, endpoint returns 503 with configuration message."""
     monkeypatch.setattr(settings, "AI_API_KEY", "")
+    monkeypatch.setattr(settings, "GEMINI_API_KEY", "")
+    monkeypatch.setattr(settings, "ALLOW_HEURISTIC_FALLBACK", False)
 
     payload = {
         "extracted_text": "Photosynthesis is the process by which green plants use sunlight to synthesize nutrients.",

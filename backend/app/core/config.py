@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     # AI Configuration (For Milestone 4)
     AI_API_KEY: str = ""
     GEMINI_API_KEY: str = ""
-    AI_MODEL: str = "gemini-2.5-flash"
+    AI_MODEL: str = "gemini-3.8-flash"
     ALLOW_HEURISTIC_FALLBACK: bool = False
 
     # Security Configuration (For Milestone 5 Test Tokens)

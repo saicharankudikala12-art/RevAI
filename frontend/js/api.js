@@ -170,6 +170,7 @@ const API = {
         status: 0,
         error: 'Unable to connect to RevAI backend server at http://127.0.0.1:8000. Please ensure the backend is running.'
       };
+    }
   },
 
   /**
