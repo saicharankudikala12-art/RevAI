@@ -1771,6 +1771,226 @@ body {
 /* ==============================================================
    ANSWER REVIEW SECTION
    ============================================================== */
+/* ==============================================================
+   MILESTONE 7: WEAK-TOPIC ANALYSIS SECTION
+   ============================================================== */
+.weak-topics-section {
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  padding: var(--space-5);
+  margin-bottom: var(--space-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.section-heading-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.section-title-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.section-title {
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text-primary);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.section-title-icon {
+  font-size: 1.25rem;
+}
+
+.section-subtitle {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+}
+
+.topics-badge {
+  padding: 4px 12px;
+  border-radius: var(--radius-full);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+  background-color: rgba(99, 102, 241, 0.12);
+  color: var(--color-primary-light);
+  border: 1px solid rgba(99, 102, 241, 0.25);
+}
+
+.weak-topics-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.topic-card {
+  background-color: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  transition: transform var(--transition-fast), border-color var(--transition-fast);
+}
+
+.topic-card:hover {
+  border-color: var(--color-border-hover);
+  transform: translateY(-1px);
+}
+
+.topic-card.priority-high {
+  border-left: 4px solid var(--color-danger);
+  background: linear-gradient(90deg, rgba(239, 68, 68, 0.04), transparent);
+}
+
+.topic-card.priority-medium {
+  border-left: 4px solid var(--color-warning);
+  background: linear-gradient(90deg, rgba(245, 158, 11, 0.04), transparent);
+}
+
+.topic-card.priority-low {
+  border-left: 4px solid var(--color-primary);
+  background: linear-gradient(90deg, rgba(99, 102, 241, 0.04), transparent);
+}
+
+.topic-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.topic-title-wrapper {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.topic-name {
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text-primary);
+}
+
+.topic-pills {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.topic-indicator-pill {
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  font-size: 11px;
+  font-weight: var(--font-weight-bold);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.topic-indicator-pill.indicator-critical {
+  background-color: var(--color-danger-bg);
+  color: var(--color-danger);
+  border: 1px solid var(--color-danger-border);
+}
+
+.topic-indicator-pill.indicator-moderate {
+  background-color: var(--color-warning-bg);
+  color: var(--color-warning);
+  border: 1px solid var(--color-warning-border);
+}
+
+.topic-indicator-pill.indicator-attention {
+  background-color: rgba(99, 102, 241, 0.15);
+  color: var(--color-primary-light);
+  border: 1px solid rgba(99, 102, 241, 0.3);
+}
+
+.topic-stats-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+}
+
+.topic-stat-item strong {
+  color: var(--color-text-primary);
+}
+
+.topic-diagnostic-box {
+  background-color: rgba(255, 255, 255, 0.02);
+  border-left: 2px solid var(--color-border);
+  padding: var(--space-2) var(--space-3);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.topic-reason-text {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  line-height: 1.5;
+}
+
+.topic-rec-text {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-primary);
+  font-weight: var(--font-weight-medium);
+  line-height: 1.5;
+}
+
+.topic-rec-text strong {
+  color: var(--color-accent);
+}
+
+.topic-empty-card {
+  background-color: var(--color-bg);
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-6);
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.topic-empty-icon {
+  font-size: 2rem;
+  margin-bottom: var(--space-1);
+}
+
+.topic-empty-title {
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text-primary);
+}
+
+.topic-empty-desc {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  max-width: 460px;
+  line-height: 1.5;
+}
+
+/* ==============================================================
+   ANSWER REVIEW SECTION
+   ============================================================== */
 .answer-review-section {
   display: flex;
   flex-direction: column;

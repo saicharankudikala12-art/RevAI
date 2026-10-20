@@ -43,6 +43,7 @@ class QuestionItem(BaseModel):
     options: dict[str, str] = Field(description="Four choices keyed by A, B, C, D")
     correct_answer: str = Field(description="Correct choice identifier: A, B, C, or D")
     explanation: str = Field(description="Clear explanation of the correct choice")
+    topic: Optional[str] = Field(default=None, description="Topic or core concept associated with this question")
 
 
 class QuestionClientItem(BaseModel):
@@ -50,6 +51,7 @@ class QuestionClientItem(BaseModel):
     id: int = Field(description="1-based question number")
     question: str = Field(description="The question prompt")
     options: dict[str, str] = Field(description="Four choices keyed by A, B, C, D")
+    topic: Optional[str] = Field(default=None, description="Topic or core concept associated with this question")
 
 
 class RevisionGenerateRequest(BaseModel):
@@ -89,6 +91,20 @@ class QuestionReviewItem(BaseModel):
     is_correct: bool = Field(description="Whether the user answered correctly")
     is_answered: bool = Field(description="Whether the user attempted this question")
     explanation: str = Field(description="Explanation of the correct answer from AI study generation")
+    topic: Optional[str] = Field(default=None, description="Topic or core concept associated with this question")
+
+
+class WeakTopicItem(BaseModel):
+    """Schema for a categorized weak topic or study concept."""
+    topic: str = Field(description="Name of the topic or concept")
+    total_questions: int = Field(description="Number of questions associated with this topic")
+    incorrect_count: int = Field(description="Number of incorrectly answered questions for this topic")
+    unanswered_count: int = Field(description="Number of unanswered questions for this topic")
+    accuracy_percentage: float = Field(description="Accuracy percentage on this topic (0.0 - 100.0)")
+    weakness_indicator: str = Field(description="Weakness severity: 'Critical Weakness', 'Moderate Weakness', or 'Needs Attention'")
+    priority: str = Field(description="Priority ranking for revision: 'high', 'medium', or 'low'")
+    reason: str = Field(description="Short diagnostic explanation of why this topic needs revision")
+    recommendation: str = Field(description="Prioritized, actionable revision recommendation")
 
 
 class TestSubmissionResponse(BaseModel):
@@ -103,5 +119,7 @@ class TestSubmissionResponse(BaseModel):
     performance_summary: str = Field(description="Actionable summary text evaluating the student's revision performance")
     time_spent_seconds: Optional[int] = Field(default=None, description="Time spent taking the test in seconds")
     questions_review: list[QuestionReviewItem] = Field(description="Per-question review breakdown with answers and explanations")
+    weak_topics: list[WeakTopicItem] = Field(default_factory=list, description="Prioritized list of weak concepts and targeted revision recommendations")
+
 
 

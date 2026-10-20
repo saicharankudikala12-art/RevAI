@@ -7,8 +7,10 @@ import httpx
 
 try:
     from backend.app.core.config import settings
+    from backend.app.services.topic_service import extract_topic_from_question
 except ImportError:  # pragma: no cover
     from app.core.config import settings
+    from app.services.topic_service import extract_topic_from_question
 
 logger = logging.getLogger(__name__)
 
@@ -155,12 +157,20 @@ def parse_and_validate_questions(raw_text: str, expected_count: int) -> List[Dic
         if not explanation:
             explanation = f"Option {correct_answer} is the correct answer according to the study material."
 
+        explicit_topic = str(item.get("topic", "")).strip() or None
+        topic = extract_topic_from_question(
+            question=q_text,
+            explanation=explanation,
+            explicit_topic=explicit_topic
+        )
+
         normalized_questions.append({
             "id": idx,
             "question": q_text,
             "options": options_dict,
             "correct_answer": correct_answer,
-            "explanation": explanation
+            "explanation": explanation,
+            "topic": topic
         })
 
     if not normalized_questions:
@@ -222,12 +232,19 @@ def generate_heuristic_fallback_questions(
             "D": f"Furthermore: {distractor_3[:80]}."
         }
 
+        exp_text = f"[Fallback Review] Option A is directly quoted from the study material: '{target_sent[:100]}...'"
+        topic = extract_topic_from_question(
+            question=prompt_text,
+            explanation=exp_text
+        )
+
         questions.append({
             "id": i + 1,
             "question": prompt_text,
             "options": options,
             "correct_answer": "A",
-            "explanation": f"[Fallback Review] Option A is directly quoted from the study material: '{target_sent[:100]}...'"
+            "explanation": exp_text,
+            "topic": topic
         })
 
     return questions

@@ -143,6 +143,11 @@ document.addEventListener('DOMContentLoaded', () => {
   const filterCountUnanswered = document.getElementById('filterCountUnanswered');
   const filterCountCorrect = document.getElementById('filterCountCorrect');
 
+  // Milestone 7: Weak-Topic Analysis Elements
+  const weakTopicsSection = document.getElementById('weakTopicsSection');
+  const weakTopicsContainer = document.getElementById('weakTopicsContainer');
+  const weakTopicsCountBadge = document.getElementById('weakTopicsCountBadge');
+
   // Set footer API target URL
   if (footerApiUrl) {
     footerApiUrl.textContent = CONFIG.API_BASE_URL.replace(/\/api$/, '');
@@ -1055,8 +1060,115 @@ document.addEventListener('DOMContentLoaded', () => {
     if (filterCountIncorrect) filterCountIncorrect.textContent = result.incorrect_count;
     if (filterCountUnanswered) filterCountUnanswered.textContent = result.unanswered_count;
 
-    // 6. Render Detailed Question Review Items
+    // 6. Render Milestone 7 Weak-Topic Analysis
+    renderWeakTopics();
+
+    // 7. Render Detailed Question Review Items
     renderReviewQuestions();
+  }
+
+  function renderWeakTopics() {
+    if (!weakTopicsContainer || !state.submissionResult) return;
+
+    const weakTopics = state.submissionResult.weak_topics || [];
+    const totalQuestions = state.submissionResult.total_questions || 0;
+    const correctCount = state.submissionResult.correct_count || 0;
+
+    weakTopicsContainer.innerHTML = '';
+
+    // Empty state 1: Perfect score (100%)
+    if (totalQuestions > 0 && correctCount === totalQuestions) {
+      if (weakTopicsCountBadge) {
+        weakTopicsCountBadge.textContent = '100% Mastery';
+        weakTopicsCountBadge.style.color = 'var(--color-success)';
+      }
+      weakTopicsContainer.innerHTML = `
+        <div class="topic-empty-card">
+          <div class="topic-empty-icon" aria-hidden="true">🎉</div>
+          <h4 class="topic-empty-title">All Concepts Mastered!</h4>
+          <p class="topic-empty-desc">
+            Outstanding performance! You answered every question correctly across all evaluated concepts. You are thoroughly prepared for this section of your exam.
+          </p>
+        </div>
+      `;
+      return;
+    }
+
+    // Empty state 2: No weak topics detected or insufficient questions
+    if (!weakTopics || weakTopics.length === 0) {
+      if (weakTopicsCountBadge) {
+        weakTopicsCountBadge.textContent = 'No critical gaps';
+        weakTopicsCountBadge.style.color = 'var(--color-text-secondary)';
+      }
+      weakTopicsContainer.innerHTML = `
+        <div class="topic-empty-card">
+          <div class="topic-empty-icon" aria-hidden="true">✨</div>
+          <h4 class="topic-empty-title">No Critical Concept Gaps Detected</h4>
+          <p class="topic-empty-desc">
+            No recurring concept weaknesses were identified from this test session. Keep practicing with additional questions to reinforce your preparation.
+          </p>
+        </div>
+      `;
+      return;
+    }
+
+    // Update topics badge
+    const count = weakTopics.length;
+    if (weakTopicsCountBadge) {
+      weakTopicsCountBadge.textContent = `${count} topic${count === 1 ? '' : 's'} need focus`;
+      weakTopicsCountBadge.style.color = 'var(--color-primary-light)';
+    }
+
+    // Render topic cards
+    weakTopics.forEach((item, idx) => {
+      const card = document.createElement('div');
+      const priorityClass = `priority-${item.priority || 'medium'}`;
+      card.className = `topic-card ${priorityClass}`;
+
+      let indicatorClass = 'indicator-moderate';
+      if (item.priority === 'high' || item.weakness_indicator === 'Critical Weakness') {
+        indicatorClass = 'indicator-critical';
+      } else if (item.priority === 'low' || item.weakness_indicator === 'Needs Attention') {
+        indicatorClass = 'indicator-attention';
+      }
+
+      const priorityLabel = (item.priority || 'medium').toUpperCase();
+
+      card.innerHTML = `
+        <div class="topic-header">
+          <div class="topic-title-wrapper">
+            <span class="topic-name">#${idx + 1} ${escapeHtml(item.topic)}</span>
+          </div>
+          <div class="topic-pills">
+            <span class="topic-indicator-pill ${indicatorClass}">
+              ${escapeHtml(item.weakness_indicator)}
+            </span>
+          </div>
+        </div>
+
+        <div class="topic-stats-row">
+          <span class="topic-stat-item">Priority: <strong>${priorityLabel}</strong></span>
+          <span>·</span>
+          <span class="topic-stat-item">Tested: <strong>${item.total_questions} question${item.total_questions === 1 ? '' : 's'}</strong></span>
+          <span>·</span>
+          <span class="topic-stat-item">Missed: <strong class="text-danger">${item.incorrect_count}</strong></span>
+          ${item.unanswered_count > 0 ? `<span>·</span><span class="topic-stat-item">Skipped: <strong class="text-warning">${item.unanswered_count}</strong></span>` : ''}
+          <span>·</span>
+          <span class="topic-stat-item">Accuracy: <strong>${item.accuracy_percentage}%</strong></span>
+        </div>
+
+        <div class="topic-diagnostic-box">
+          <p class="topic-reason-text">
+            <strong>Diagnosis:</strong> ${escapeHtml(item.reason)}
+          </p>
+          <p class="topic-rec-text">
+            <strong>Recommendation:</strong> ${escapeHtml(item.recommendation)}
+          </p>
+        </div>
+      `;
+
+      weakTopicsContainer.appendChild(card);
+    });
   }
 
   function renderReviewQuestions() {
@@ -1131,11 +1243,16 @@ document.addEventListener('DOMContentLoaded', () => {
         `;
       });
 
+      const topicTagHtml = q.topic
+        ? `<span class="review-opt-tag" style="background: rgba(99, 102, 241, 0.12); color: var(--color-primary-light); font-size: 11px; padding: 2px 8px; border-radius: var(--radius-full); border: 1px solid rgba(99, 102, 241, 0.25);">📚 ${escapeHtml(q.topic)}</span>`
+        : '';
+
       card.innerHTML = `
         <div class="review-card-header">
-          <div class="review-q-num-wrapper">
+          <div class="review-q-num-wrapper" style="display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap;">
             <span class="review-q-badge">Question ${q.id}</span>
             <span class="review-status-pill">${statusIcon} ${statusLabel}</span>
+            ${topicTagHtml}
           </div>
           <div class="review-user-choice-pill" style="font-size: var(--font-size-xs); color: var(--color-text-muted);">
             Your Answer: <strong>${q.user_answer ? 'Option ' + q.user_answer : 'None (Unanswered)'}</strong>

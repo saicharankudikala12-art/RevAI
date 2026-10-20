@@ -10,6 +10,10 @@ try:
         evaluate_test_submission,
         ScoringError,
     )
+    from backend.app.services.topic_service import (
+        extract_topic_from_question,
+        analyze_weak_topics,
+    )
 except ImportError:  # pragma: no cover
     from app.services.pdf_service import (
         extract_pdf_data,
@@ -22,6 +26,10 @@ except ImportError:  # pragma: no cover
         evaluate_test_submission,
         ScoringError,
     )
+    from app.services.topic_service import (
+        extract_topic_from_question,
+        analyze_weak_topics,
+    )
 
 __all__ = [
     "extract_pdf_data",
@@ -31,5 +39,7 @@ __all__ = [
     "verify_test_token",
     "evaluate_test_submission",
     "ScoringError",
+    "extract_topic_from_question",
+    "analyze_weak_topics",
 ]
 

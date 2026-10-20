@@ -12,6 +12,11 @@ try:
         QuestionItem,
         QuestionReviewItem,
         TestSubmissionResponse,
+        WeakTopicItem,
+    )
+    from backend.app.services.topic_service import (
+        analyze_weak_topics,
+        extract_topic_from_question,
     )
 except ImportError:  # pragma: no cover
     from app.core.config import settings
@@ -19,6 +24,11 @@ except ImportError:  # pragma: no cover
         QuestionItem,
         QuestionReviewItem,
         TestSubmissionResponse,
+        WeakTopicItem,
+    )
+    from app.services.topic_service import (
+        analyze_weak_topics,
+        extract_topic_from_question,
     )
 
 logger = logging.getLogger(__name__)
@@ -201,19 +211,25 @@ def evaluate_test_submission(
             options = raw_q.options
             correct_ans = str(raw_q.correct_answer).strip().upper()
             explanation = raw_q.explanation
+            explicit_topic = raw_q.topic
         else:
             q_id = int(raw_q.get("id", idx))
             q_text = str(raw_q.get("question", "")).strip()
             options = raw_q.get("options", {})
             correct_ans = str(raw_q.get("correct_answer", "A")).strip().upper()
             explanation = str(raw_q.get("explanation", ""))
+            explicit_topic = raw_q.get("topic")
+
+        topic = extract_topic_from_question(
+            question=q_text,
+            explanation=explanation,
+            explicit_topic=explicit_topic
+        )
 
         user_choice = normalized_answers.get(str(q_id))
 
         is_answered = user_choice is not None
         is_correct = False
-
-
 
         if not is_answered:
             unanswered_count += 1
@@ -232,7 +248,8 @@ def evaluate_test_submission(
                 correct_answer=correct_ans,
                 is_correct=is_correct,
                 is_answered=is_answered,
-                explanation=explanation
+                explanation=explanation,
+                topic=topic
             )
         )
 
@@ -244,6 +261,8 @@ def evaluate_test_submission(
         unanswered=unanswered_count
     )
 
+    weak_topics = analyze_weak_topics(reviews)
+
     return TestSubmissionResponse(
         success=True,
         total_questions=total_questions,
@@ -254,5 +273,6 @@ def evaluate_test_submission(
         performance_rating=rating,
         performance_summary=summary,
         time_spent_seconds=time_spent_seconds,
-        questions_review=reviews
+        questions_review=reviews,
+        weak_topics=weak_topics
     )
